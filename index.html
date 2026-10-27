@@ -17,13 +17,9 @@
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  window.OneSignalDeferred.push(function(OneSignal) {
-    OneSignal.init({
-      appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
-      allowLocalhostAsSecureOrigin: true
-    }).then(function() {
-      return OneSignal.Slidedown.promptPush();
-    });
+OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.User.addTag("user_phone", "01002669119");
+});
 
     // الاستماع للإشعارات الواردة أثناء فتح التطبيق وتحديث الجرس فوراً
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
