@@ -24,8 +24,6 @@
   OneSignalDeferred.push(async function(OneSignal) {
     await OneSignal.init({
       appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
-      serviceWorkerPath: "/miromarket/OneSignalSDKWorker.js",
-      serviceWorkerParam: { scope: "/miromarket/" },
       allowLocalhostAsSecureOrigin: true
     });
     
@@ -675,6 +673,14 @@
             renderNotificationsUI();
 
             fetchDataFromSheets();
+            
+            // إذا كان المستخدم مسجلاً مسبقاً، نقوم بربط هويته بـ OneSignal تلقائياً عند فتح الموقع
+            if (state.user && state.user.phone) {
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.login(String(state.user.phone).trim());
+                });
+            }
         });
 
         function hideLoadingScreen() {
@@ -1330,6 +1336,13 @@
 
                 state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
+                
+                // 🟢 تسجيل هوية المستخدم في OneSignal باستخدام رقم الهاتف
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.login(String(cust.phone).trim());
+                });
+
                 updateProfileUI();
                 closeLoginModal();
                 updateCartUI();
@@ -1372,6 +1385,13 @@
 
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
+                
+                // 🟢 تسجيل هوية المستخدم في OneSignal عند التسجيل أيضاً
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.login(String(phone).trim());
+                });
+
                 updateProfileUI();
 
                 tempRegistrationData = { phone, name, email, address, password };
@@ -1433,6 +1453,12 @@
         }
 
         function handleSignOut() {
+            // تسجيل خروج من OneSignal أيضاً
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {
+                await OneSignal.logout();
+            });
+
             state.user = null;
             localStorage.removeItem('miro_user');
             updateProfileUI();
