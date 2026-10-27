@@ -25,6 +25,7 @@
     
     await OneSignal.Slidedown.promptPush();
 
+    // تعديل: التقاط الإشعارات الواردة وإضافتها تلقائياً لمركز الإشعارات (أيقونة الجرس)
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
@@ -100,6 +101,7 @@
         </div>
     </div>
 
+    <!-- نافذة مركز الإشعارات (الجرس) -->
     <div id="notificationModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl relative max-h-[80vh] flex flex-col">
             <div class="flex items-center justify-between border-b pb-3">
@@ -360,6 +362,7 @@
 
         window.alert = function(message) { showToast(message, 'fa-bell'); };
 
+        // نظام مركز الإشعارات (الجرس)
         let appNotifications = JSON.parse(localStorage.getItem('miro_notifications')) || [
             { id: 1, title: "مرحباً بك في Miro MarkEt", body: "استمتع بأفضل الخضروات والفواكه الطازجة بأفضل الأسعار.", date: "اليوم", read: false }
         ];
@@ -489,6 +492,7 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
+            // إضافة علامة الهاتف إذا كان المستخدم مسجلاً بالفعل عند فتح التطبيق
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
@@ -972,6 +976,7 @@
                 state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
+                // تعديل: إضافة تگ رقم الهاتف إلى OneSignal عند تسجيل الدخول الناجح
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.User.addTag("user_phone", String(cust.phone).trim());
@@ -992,6 +997,7 @@
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
+                // تعديل: إضافة تگ رقم الهاتف إلى OneSignal عند التسجيل الجديد
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.User.addTag("user_phone", String(phone).trim());
@@ -1038,6 +1044,7 @@
         }
 
         function handleSignOut() {
+            // تعديل: إزالة تگ رقم الهاتف عند تسجيل الخروج
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.User.removeTag("user_phone");
