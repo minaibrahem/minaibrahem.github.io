@@ -539,6 +539,12 @@
             renderNotificationsUI();
         }
 
+        function deleteNotification(id) {
+            appNotifications = appNotifications.filter(n => n.id !== id);
+            saveNotifications();
+            renderNotificationsUI();
+        }
+
         let pendingConfirmCallback = null;
         function openCustomConfirm(title, message, onConfirm) {
             const modal = document.getElementById('customConfirmModal');
@@ -674,7 +680,6 @@
 
             fetchDataFromSheets();
             
-            // إذا كان المستخدم مسجلاً مسبقاً، نقوم بربط هويته بـ OneSignal تلقائياً عند فتح الموقع
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
@@ -1337,7 +1342,6 @@
                 state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
                 
-                // 🟢 تسجيل هوية المستخدم في OneSignal باستخدام رقم الهاتف
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.login(String(cust.phone).trim());
@@ -1386,7 +1390,6 @@
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
                 
-                // 🟢 تسجيل هوية المستخدم في OneSignal عند التسجيل أيضاً
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.login(String(phone).trim());
@@ -1453,7 +1456,6 @@
         }
 
         function handleSignOut() {
-            // تسجيل خروج من OneSignal أيضاً
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.logout();
