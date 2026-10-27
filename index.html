@@ -18,29 +18,19 @@
     <!-- Google Fonts Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     
-   <!-- 🟢 OneSignal Web SDK -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-          appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
-          allowLocalhostAsSecureOrigin: true
-        });
-        
-        await OneSignal.Slidedown.promptPush();
-
-        OneSignal.Notifications.addEventListener('click', event => {
-            const notificationData = event.notification;
-            addNotificationToCenter(notificationData.title || "إشعار جديد", notificationData.body || "لديك رسالة جديدة من ميرو ماركت");
-        });
-
-        OneSignal.Notifications.addEventListener('foregroundWillDisplay', event => {
-            const notificationData = event.notification;
-            addNotificationToCenter(notificationData.title || "إشعار جديد", notificationData.body || "لديك رسالة جديدة من ميرو ماركت");
-        });
-      });
-    </script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
+      serviceWorkerParam: { scope: "/miromarket/" },
+      allowLocalhostAsSecureOrigin: true
+    });
+    
+    await OneSignal.Slidedown.promptPush();
+  });
+</script>
 
     <script>
         tailwind.config = {
