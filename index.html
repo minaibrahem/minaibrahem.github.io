@@ -28,6 +28,18 @@
     });
     
     await OneSignal.Slidedown.promptPush();
+
+    // التقاط الإشعارات القادمة أثناء فتح التطبيق وإضافتها لمركز الإشعارات الداخلي
+    OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+        var notifData = event.notification;
+        if (notifData) {
+            var title = notifData.title || "إشعار جديد";
+            var body = notifData.body || "";
+            if (typeof addNotificationToCenter === 'function') {
+                addNotificationToCenter(title, body);
+            }
+        }
+    });
   });
 </script>
 
@@ -680,10 +692,11 @@
 
             fetchDataFromSheets();
             
+            // تسجيل رقم الهاتف كـ Tag مضمون للتأكد من وصول الإشعار له
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.login(String(state.user.phone).trim());
+                    await OneSignal.User.addTag("user_phone", String(state.user.phone).trim());
                 });
             }
         });
@@ -1342,9 +1355,10 @@
                 state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
                 
+                // إضافة رقم الهاتف كـ Tag لـ OneSignal
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.login(String(cust.phone).trim());
+                    await OneSignal.User.addTag("user_phone", String(cust.phone).trim());
                 });
 
                 updateProfileUI();
@@ -1390,9 +1404,10 @@
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
                 
+                // إضافة رقم الهاتف كـ Tag لـ OneSignal
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.login(String(phone).trim());
+                    await OneSignal.User.addTag("user_phone", String(phone).trim());
                 });
 
                 updateProfileUI();
@@ -1458,7 +1473,7 @@
         function handleSignOut() {
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.logout();
+                await OneSignal.User.removeTag("user_phone");
             });
 
             state.user = null;
