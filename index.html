@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <link rel="manifest" href="./manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- إخفاء شريط العنوان والمتصفح عند فتح التطبيق كـ PWA -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Miro MarkEt">
+    
+    <title>Miro MarkEt | ميرو ماركت</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Cairo -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- 🟢 OneSignal Web SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: "OneSignalSDKWorker.js",
+          serviceWorkerParam: { scope: "/Miro-MarkEt/" }
+        });
+        
+        // إظهار نافذة طلب الإشعارات تلقائياً للزوار بشكل صحيح بداخل دالة التهيئة
+        await OneSignal.Slidedown.promptPush();
+
+        // الاستماع للإشعارات الواردة لإضافتها مباشرة إلى مركز الإشعارات داخل التطبيق
+        OneSignal.Notifications.addEventListener('click', event => {
+            const notificationData = event.notification;
+            addNotificationToCenter(notificationData.title || "إشعار جديد", notificationData.body || "لديك رسالة جديدة من ميرو ماركت");
+        });
+
+        OneSignal.Notifications.addEventListener('foregroundWillDisplay', event => {
+            const notificationData = event.notification;
+            addNotificationToCenter(notificationData.title || "إشعار جديد", notificationData.body || "لديك رسالة جديدة من ميرو ماركت");
+        });
+      });
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        amazon: {
+                            navy: '#131921',
+                            lightNavy: '#232f3e',
+                            yellow: '#febd69',
+                            orange: '#f3a847',
+                            button: '#ffd814',
+                            buttonHover: '#f7ca00',
+                            green: '#008542'
+                        }
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html, body {
+            background-color: #ffffff !important;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 pb-20 select-none">
+
+    <!-- Custom Toast Notification -->
+    <div id="customToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
+        <div class="bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-gray-700 min-w-[280px]">
+            <i id="toastIcon" class="fa-solid fa-circle-info text-amazon-yellow text-lg"></i>
+            <span id="toastMessage" class="text-xs font-bold font-cairo"></span>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="customConfirmModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl text-center">
+            <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirmTitle" class="font-bold text-sm text-gray-800">تأكيد الإجراء</h3>
+            <p id="confirmMessage" class="text-xs text-gray-600 leading-relaxed"></p>
+            <div class="flex gap-2 pt-2">
+                <button id="btnConfirmYes" class="w-1/2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl text-xs shadow transition">نعم، إرسال</button>
+                <button onclick="closeConfirmModal()" class="w-1/2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl text-xs transition">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🟢 NOTIFICATION CENTER MODAL -->
+    <div id="notificationModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl relative max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="font-bold text-sm text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-bell text-amazon-orange"></i> مركز الإشعارات
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button onclick="markAllNotificationsAsRead()" class="text-[11px] text-emerald-700 font-bold hover:underline">تحديد الكل مقروء</button>
+                    <button onclick="clearAllNotifications()" class="text-[11px] text-red-600 font-bold hover:underline">حذف الكل</button>
+                    <button onclick="closeNotificationModal()" class="text-gray-400 hover:text-gray-600 mr-2">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="notificationsListContainer" class="space-y-2 overflow-y-auto flex-1 pr-1">
+                <!-- سيتم حقن الإشعارات هنا برمجياً -->
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة التحميل (Splash Screen) -->
+    <div id="loading-screen" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #ffffff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+    ">
+        <img src="home.png" alt="Miro MarkEt" style="width: 200px; height: 200px; border-radius: 20px; margin-bottom: 20px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400'">
+        
+        <div style="
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #008542;
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            animation: spin 1s linear infinite;
+        "></div>
+        
+        <p style="margin-top: 15px; font-family: 'Cairo', sans-serif; color: #333; font-weight: bold; font-size: 14px;">جاري تحميل أحدث الأسعار والمنتجات...</p>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-gray-50 flex flex-col relative shadow-xl">
+
+        <!-- Top Header Bar -->
+        <header class="bg-amazon-navy text-white sticky top-0 z-40 shadow-md">
+            <div class="flex items-center justify-between px-4 py-2 gap-2">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="switchTab('home')">
+                    <span class="text-2xl font-black tracking-wider text-amazon-yellow flex items-center gap-1">
+                        <i class="fa-solid font-bold fa-basket-shopping text-amazon-orange"></i> Miro
+                    </span>
+                    <span class="bg-amazon-orange text-xs text-gray-900 font-bold px-1.5 py-0.5 rounded">MarkEt</span>
+                </div>
+
+                <!-- 🟢 زر مركز الإشعارات بجانب خانة البحث -->
+                <div class="flex items-center gap-2">
+                    <button onclick="openNotificationModal()" class="relative bg-amazon-lightNavy hover:bg-gray-700 text-white p-2 rounded-xl border border-gray-700 transition">
+                        <i class="fa-solid fa-bell text-sm text-amazon-yellow"></i>
+                        <span id="notificationBadge" class="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white hidden">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="px-4 pb-2">
+                <div class="relative">
+                    <input type="text" id="searchInput" oninput="filterProducts()" placeholder="ابحث عن خضار، فواكه..." 
+                           class="w-full text-xs text-gray-900 px-3 py-2 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-amazon-orange bg-white shadow-inner">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-gray-400 text-xs"></i>
+                </div>
+            </div>
+
+            <div class="bg-amazon-lightNavy px-4 py-1.5 text-xs text-gray-300 flex items-center justify-between border-t border-gray-700">
+                <div class="flex items-center gap-1.5 truncate">
+                    <i class="fa-solid fa-location-dot text-amazon-orange"></i>
+                    <span id="deliveryHeaderLocation" class="truncate">التوصيل إلى: اختر موقعك</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="bg-amazon-green/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-green-500/30 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                        <span data-i18n="live">مباشر</span>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 pb-12">
+
+            <!-- TAB 1: HOME PAGE -->
+            <div id="tab-home" class="tab-content space-y-4">
+                <div class="p-3">
+                    <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 text-white rounded-2xl p-4 shadow-lg relative overflow-hidden">
+                        <div class="relative z-10">
+                            <span class="bg-yellow-400 text-gray-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider" data-i18n="todayOffers">عروض اليوم</span>
+                            <h2 class="text-lg font-black mt-1" data-i18n="bannerTitle">خضروات وفواكه طازجة 100%</h2>
+                            <p class="text-xs opacity-90 mt-0.5" data-i18n="bannerSub">توصيل سريع حتى باب المنزل بأفضل الأسعار!</p>
+                            <button onclick="scrollToProducts()" class="mt-3 bg-amazon-button hover:bg-amazon-buttonHover text-gray-900 text-xs font-bold px-4 py-1.5 rounded-lg shadow-md transition flex items-center gap-1">
+                                <span data-i18n="shopNow">تسوق الآن</span> <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                            </button>
+                        </div>
+                        <i class="fa-solid fa-apple-whole absolute -left-4 -bottom-4 text-8xl opacity-15 rotate-12"></i>
+                    </div>
+                </div>
+
+                <div class="px-3">
+                    <div class="flex gap-2 overflow-x-auto hide-scrollbar py-1">
+                        <button onclick="filterCategory('all', this)" class="cat-btn bg-amazon-navy text-white text-xs px-4 py-2 rounded-xl whitespace-nowrap font-bold shadow-sm transition" data-i18n="catAll">الكل</button>
+                        <button onclick="filterCategory('فواكه', this)" class="cat-btn bg-white text-gray-700 border border-gray-200 text-xs px-4 py-2 rounded-xl whitespace-nowrap font-semibold shadow-sm transition hover:bg-gray-50" data-i18n="catFruits">🍎 فواكه طازجة</button>
+                        <button onclick="filterCategory('خضروات', this)" class="cat-btn bg-white text-gray-700 border border-gray-200 text-xs px-4 py-2 rounded-xl whitespace-nowrap font-semibold shadow-sm transition hover:bg-gray-50" data-i18n="catVeggies">🥦 خضروات طازجة</button>
+                        <button onclick="filterCategory('ورقيات', this)" class="cat-btn bg-white text-gray-700 border border-gray-200 text-xs px-4 py-2 rounded-xl whitespace-nowrap font-semibold shadow-sm transition hover:bg-gray-50" data-i18n="catHerbs">🥬 ورقيات واعشاب</button>
+                    </div>
+                </div>
+
+                <div class="px-3" id="productsSection">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                            <i class="fa-solid fa-store text-amazon-orange"></i> <span data-i18n="availableProducts">المنتجات المتاحة</span>
+                        </h3>
+                        <span id="productCount" class="text-xs text-gray-500"></span>
+                    </div>
+
+                    <div id="productsGrid" class="grid grid-cols-2 gap-3"></div>
+                </div>
+            </div>
+
+            <!-- TAB 2: CART PAGE -->
+            <div id="tab-cart" class="tab-content hidden p-3 space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                    <h2 class="text-base font-bold text-gray-800 flex items-center gap-2 mb-3 border-b pb-2">
+                        <i class="fa-solid fa-basket-shopping text-amazon-orange"></i> <span data-i18n="yourCart">سلة التسوق الخاصة بك</span>
+                    </h2>
+
+                    <div id="cartItems" class="space-y-3"></div>
+
+                    <div id="cartEmpty" class="text-center py-10 space-y-3">
+                        <i class="fa-solid fa-cart-flatbed text-gray-300 text-5xl"></i>
+                        <p class="text-gray-500 text-sm" data-i18n="emptyCart">سلتك فارغة حالياً</p>
+                        <button onclick="switchTab('home')" class="bg-amazon-navy text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow hover:bg-amazon-lightNavy transition" data-i18n="startShopping">
+                            ابدأ التسوق الآن
+                        </button>
+                    </div>
+                </div>
+
+                <div id="checkoutSection" class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3 hidden">
+                    <h3 class="font-bold text-sm text-gray-800 border-b pb-2" data-i18n="billAndDelivery">تفاصيل الفاتورة والتوصيل</h3>
+
+                    <div class="space-y-1.5 text-xs text-gray-600">
+                        <div class="flex justify-between">
+                            <span data-i18n="subtotal">إجمالي المنتجات:</span>
+                            <span id="subtotalPrice" class="font-semibold text-gray-800">0 ج.م</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span data-i18n="deliveryFee">رسوم التوصيل:</span>
+                            <span id="deliveryFee" class="font-semibold text-gray-800">0 ج.م</span>
+                        </div>
+                        <div class="flex justify-between text-sm font-bold text-gray-900 pt-2 border-t">
+                            <span data-i18n="total">المبلغ الإجمالي:</span>
+                            <span id="grandTotalPrice" class="text-emerald-700">0 ج.م</span>
+                        </div>
+                    </div>
+
+                    <button onclick="submitOrder()" id="btnSubmitOrder" class="w-full bg-amazon-button text-gray-900 font-extrabold text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 mt-2">
+                        <i class="fa-solid fa-check-circle text-base"></i> <span data-i18n="confirmOrder">تأكيد وإرسال الطلب</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 3: ACCOUNT -->
+            <div id="tab-account" class="tab-content hidden p-3 space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                    <div class="flex items-center justify-between border-b pb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-amazon-navy text-amazon-yellow font-bold text-lg rounded-full flex items-center justify-center border-2 border-amazon-orange">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div>
+                                <h3 id="profileName" class="font-bold text-sm text-gray-800" data-i18n="guest">زائر</h3>
+                                <p id="profilePhone" class="text-xs text-gray-500" data-i18n="notLoggedIn">لم يتم تسجيل الدخول</p>
+                            </div>
+                        </div>
+                        <div id="authBtnGroup" class="flex items-center gap-1.5">
+                            <button onclick="openLoginModal('signin')" id="btnSignIn" class="text-xs bg-amazon-navy text-white px-2.5 py-1.5 rounded-lg font-semibold" data-i18n="signIn">تسجيل الدخول</button>
+                            <button onclick="openLoginModal('signup')" id="btnSignUp" class="text-xs bg-amazon-orange text-gray-900 px-2.5 py-1.5 rounded-lg font-bold" data-i18n="signUp">حساب جديد</button>
+                            <button onclick="handleSignOut()" id="btnSignOut" class="text-xs bg-red-600 text-white px-2.5 py-1.5 rounded-lg font-bold hidden" data-i18n="signOut">تسجيل الخروج</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- قسم سجل الطلبات السابقة -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                    <div class="flex items-center justify-between border-b pb-2">
+                        <h3 class="font-bold text-xs text-gray-800 flex items-center gap-2">
+                            <i class="fa-solid fa-box-archive text-amazon-orange"></i> طلباتي السابقة
+                        </h3>
+                        <button onclick="fetchDataFromSheets()" class="text-[11px] text-emerald-700 font-bold flex items-center gap-1 hover:underline">
+                            <i class="fa-solid fa-rotate"></i> تحديث الحالات
+                        </button>
+                    </div>
+                    <div id="ordersHistoryContainer" class="space-y-2 max-h-60 overflow-y-auto text-xs">
+                        <p class="text-gray-400 text-center py-2">لا توجد طلبات سابقة حتى الآن</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: SETTINGS -->
+            <div id="tab-settings" class="tab-content hidden p-3 space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h2 class="text-base font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-amazon-orange"></i> <span data-i18n="appSettings">إعدادات التطبيق</span>
+                    </h2>
+
+                    <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl">
+                        <div class="text-xs">
+                            <span class="font-bold block text-gray-800" data-i18n="appLang">لغة التطبيق / Language</span>
+                        </div>
+                        <select id="langSelect" onchange="changeLanguage(this.value)" class="text-xs border p-1.5 rounded-lg bg-white font-semibold">
+                            <option value="ar">العربية (Arabic)</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+
+                    <!-- بطاقة التواصل ورقم التليفون -->
+                    <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
+                        <span class="text-xs font-bold block text-gray-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-headset text-emerald-600"></i> رقم التواصل والدعم الفني:
+                        </span>
+                        <a href="https://wa.me/201002669119" target="_blank" class="flex items-center justify-between p-2.5 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs font-bold transition hover:bg-emerald-100">
+                            <span class="flex items-center gap-2">
+                                <i class="fa-brands fa-whatsapp text-base text-emerald-600"></i>
+                                <span dir="ltr">01002669119</span>
+                            </span>
+                            <span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded">مراسلة فورية</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- BOTTOM NAVIGATION -->
+        <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 px-2 py-1.5 flex justify-around items-center z-40 shadow-lg">
+            <button onclick="switchTab('home')" id="nav-home" class="nav-btn flex flex-col items-center justify-center w-1/4 py-1 text-amazon-orange font-bold">
+                <i class="fa-solid fa-house text-lg"></i>
+                <span class="text-[10px] mt-0.5" data-i18n="navHome">الرئيسية</span>
+            </button>
+            <button onclick="switchTab('cart')" id="nav-cart" class="nav-btn flex flex-col items-center justify-center w-1/4 py-1 text-gray-500">
+                <div class="relative">
+                    <i class="fa-solid fa-cart-shopping text-lg"></i>
+                    <span id="cartBadge" class="absolute -top-1.5 -right-2.5 bg-amazon-orange text-gray-900 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">0</span>
+                </div>
+                <span class="text-[10px] mt-0.5" data-i18n="navCart">السلة</span>
+            </button>
+            <button onclick="switchTab('account')" id="nav-account" class="nav-btn flex flex-col items-center justify-center w-1/4 py-1 text-gray-500">
+                <i class="fa-solid fa-user text-lg"></i>
+                <span class="text-[10px] mt-0.5" data-i18n="navAccount">حسابي</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn flex flex-col items-center justify-center w-1/4 py-1 text-gray-500">
+                <i class="fa-solid fa-gear text-lg"></i>
+                <span class="text-[10px] mt-0.5" data-i18n="navSettings">الإعدادات</span>
+            </button>
+        </nav>
+
+        <!-- LOGIN / SIGNUP MODAL -->
+        <div id="loginModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl relative">
+                <button onclick="closeLoginModal()" class="absolute top-3 left-3 text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+                <div class="flex border-b text-xs font-bold mb-2">
+                    <button id="modalTabSignIn" onclick="setAuthMode('signin')" class="w-1/2 pb-2 border-b-2 border-amazon-orange text-amazon-navy" data-i18n="signIn">تسجيل الدخول</button>
+                    <button id="modalTabSignUp" onclick="setAuthMode('signup')" class="w-1/2 pb-2 text-gray-400 border-b-2 border-transparent" data-i18n="signUp">حساب جديد</button>
+                </div>
+                
+                <div id="authFieldsStep1" class="space-y-3 text-xs">
+                    <input type="tel" id="authPhone" placeholder="رقم الجوال" class="w-full p-2.5 border rounded-xl bg-gray-50">
+                    <input type="password" id="authPass" placeholder="كلمة المرور" class="w-full p-2.5 border rounded-xl bg-gray-50">
+                    
+                    <div id="forgotPassContainer" class="text-left px-1">
+                        <a href="#" onclick="openForgotPasswordWhatsApp(event)" class="text-[11px] text-emerald-700 font-bold hover:underline inline-flex items-center gap-1">
+                            <i class="fa-solid fa-key text-amazon-orange text-[10px]"></i> نسيت كلمة المرور؟
+                        </a>
+                    </div>
+
+                    <div id="signupOnlyFields" class="space-y-3 hidden">
+                        <input type="text" id="authName" placeholder="الاسم الكامل" class="w-full p-2.5 border rounded-xl bg-gray-50">
+                        <input type="email" id="authEmail" placeholder="البريد الإلكتروني (مثال: name@gmail.com)" class="w-full p-2.5 border rounded-xl bg-gray-50">
+                        <input type="text" id="authAddress" placeholder="العنوان التفصيلي" class="w-full p-2.5 border rounded-xl bg-gray-50">
+                    </div>
+                    
+                    <button onclick="handleAuthSubmit()" id="btnAuthSubmitStep1" class="w-full bg-amazon-button text-gray-900 font-bold py-2.5 rounded-xl shadow" data-i18n="saveAndContinue">حفظ ومتابعة</button>
+                </div>
+
+                <div id="authFieldsStep2" class="space-y-3 text-xs hidden text-center">
+                    <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-3">
+                        <i class="fa-brands fa-whatsapp text-emerald-600 text-4xl animate-bounce"></i>
+                        <h4 class="font-bold text-gray-800 text-sm">طلب التفعيل قيد المراجعة</h4>
+                        <p class="text-xs text-gray-600 leading-relaxed">
+                            تم إرسال طلب التفعيل بنجاح. يرجى الضغط على الزر بالأسفل لإرسال رسالة التفعيل إلى إدارة المتجر عبر الواتساب لتأكيد رقمك.
+                        </p>
+                        <a id="btnSendWhatsappMsg" href="#" target="_blank" class="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow text-xs transition">
+                            <i class="fa-brands fa-whatsapp text-base"></i> إرسال طلب التفعيل عبر الواتساب
+                        </a>
+                    </div>
+
+                    <div class="pt-2 space-y-2">
+                        <button onclick="checkAdminApprovalStatus()" id="btnCheckApproval" class="w-full bg-amazon-navy text-amazon-yellow font-bold py-2.5 rounded-xl shadow hover:bg-amazon-lightNavy transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-rotate-right"></i> تحديث حالة التفعيل
+                        </button>
+                        <p id="approvalStatusMsg" class="text-[11px] font-bold text-gray-500"></p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        function showToast(message, icon = 'fa-circle-info') {
+            const toast = document.getElementById('customToast');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            if (!toast || !toastMsg) return;
+
+            toastMsg.textContent = message;
+            toastIcon.className = `fa-solid ${icon} text-amazon-yellow text-lg`;
+
+            toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
+            }, 3500);
+        }
+
+        window.alert = function(message) {
+            showToast(message, 'fa-bell');
+        };
+
+        // 🟢 دوال مركز الإشعارات (Notification Center Logic)
+        let appNotifications = JSON.parse(localStorage.getItem('miro_notifications')) || [
+            { id: 1, title: "مرحباً بك في Miro MarkEt", body: "استمتع بأفضل الخضروات والفواكه الطازجة بأفضل الأسعار.", date: "اليوم", read: false }
+        ];
+
+        function openNotificationModal() {
+            const modal = document.getElementById('notificationModal');
+            if (modal) modal.classList.remove('hidden');
+            renderNotificationsUI();
+        }
+
+        function closeNotificationModal() {
+            const modal = document.getElementById('notificationModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function addNotificationToCenter(title, body) {
+            const newNotif = {
+                id: Date.now(),
+                title: title,
+                body: body,
+                date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                read: false
+            };
+            appNotifications.unshift(newNotif);
+            saveNotifications();
+            renderNotificationsUI();
+        }
+
+        function saveNotifications() {
+            localStorage.setItem('miro_notifications', JSON.stringify(appNotifications));
+        }
+
+        function renderNotificationsUI() {
+            const container = document.getElementById('notificationsListContainer');
+            const badge = document.getElementById('notificationBadge');
+            if (!container) return;
+
+            const unreadCount = appNotifications.filter(n => !n.read).length;
+            if (badge) {
+                if (unreadCount > 0) {
+                    badge.textContent = unreadCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+            if (appNotifications.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 text-center py-8 text-xs">لا توجد إشعارات حالياً</p>`;
+                return;
+            }
+
+            container.innerHTML = appNotifications.map(n => `
+                <div class="p-3 rounded-xl border ${n.read ? 'bg-white border-gray-100 text-gray-600' : 'bg-amber-50/60 border-amber-200 text-gray-900 font-medium'} flex items-start justify-between gap-2 transition">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-dot text-[8px] ${n.read ? 'text-gray-300' : 'text-amazon-orange'}"></i>
+                            <h4 class="font-bold text-xs">${n.title}</h4>
+                        </div>
+                        <p class="text-xs text-gray-600 leading-relaxed">${n.body}</p>
+                        <span class="text-[10px] text-gray-400 block">${n.date}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        ${!n.read ? `<button onclick="markAsRead(${n.id})" class="text-[10px] text-emerald-700 hover:underline px-1">قراءة</button>` : ''}
+                        <button onclick="deleteNotification(${n.id})" class="text-gray-400 hover:text-red-600 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function markAsRead(id) {
+            const notif = appNotifications.find(n => n.id === id);
+            if (notif) {
+                notif.read = true;
+                saveNotifications();
+                renderNotificationsUI();
+            }
+        }
+
+        function markAllNotificationsAsRead() {
+            appNotifications.forEach(n => n.read = true);
+            saveNotifications();
+            renderNotificationsUI();
+        }
+
+        function clearAllNotifications() {
+            appNotifications = [];
+            saveNotifications();
+            renderNotificationsUI();
+        }
+
+        let pendingConfirmCallback = null;
+        function openCustomConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('customConfirmModal');
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            pendingConfirmCallback = onConfirm;
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('customConfirmModal');
+            if (modal) modal.classList.add('hidden');
+            pendingConfirmCallback = null;
+        }
+
+        document.getElementById('btnConfirmYes').addEventListener('click', () => {
+            if (pendingConfirmCallback) pendingConfirmCallback();
+            closeConfirmModal();
+        });
+
+        const i18n = {
+            ar: {
+                deliverTo: "التوصيل إلى: اختر موقعك",
+                live: "مباشر",
+                todayOffers: "عروض اليوم",
+                bannerTitle: "خضروات وفواكه طازجة 100%",
+                bannerSub: "توصيل سريع حتى باب المنزل بأفضل الأسعار!",
+                shopNow: "تسوق الآن",
+                catAll: "الكل",
+                catFruits: "🍎 فواكه طازجة",
+                catVeggies: "🥦 خضروات طازجة",
+                catHerbs: "🥬 ورقيات واعشاب",
+                availableProducts: "المنتجات المتاحة",
+                yourCart: "سلة التسوق الخاصة بك",
+                emptyCart: "سلتك فارغة حالياً",
+                startShopping: "ابدأ التسوق الآن",
+                billAndDelivery: "تفاصيل الفاتورة والتوصيل",
+                subtotal: "إجمالي المنتجات:",
+                deliveryFee: "رسوم التوصيل:",
+                total: "المبلغ الإجمالي:",
+                confirmOrder: "تأكيد وإرسال الطلب",
+                signIn: "تسجيل الدخول",
+                signUp: "حساب جديد",
+                signOut: "تسجيل الخروج",
+                appSettings: "إعدادات التطبيق",
+                appLang: "لغة التطبيق / Language",
+                navHome: "الرئيسية",
+                navCart: "السلة",
+                navAccount: "حسابي",
+                navSettings: "الإعدادات",
+                saveAndContinue: "حفظ ومتابعة",
+                egp: "ج.م",
+                kg: "كجم",
+                addToCart: "إضافة للسلة",
+                guest: "زائر",
+                notLoggedIn: "لم يتم تسجيل الدخول",
+                pastOrders: "طلباتي السابقة",
+                updateStatuses: "تحديث الحالات",
+                noOrders: "لا توجد طلبات سابقة حتى الآن",
+                orderIdLabel: "رقم الطلب:",
+                itemsLabel: "المنتجات:"
+            },
+            en: {
+                deliverTo: "Deliver to: Select Location",
+                live: "LIVE",
+                todayOffers: "Today's Offers",
+                bannerTitle: "100% Fresh Vegetables & Fruits",
+                bannerSub: "Fast home delivery with the best market prices!",
+                shopNow: "Shop Now",
+                catAll: "All",
+                catFruits: "🍎 Fresh Fruits",
+                catVeggies: "🥦 Fresh Vegetables",
+                catHerbs: "🥬 Fresh Herbs",
+                availableProducts: "Available Products",
+                yourCart: "Your Shopping Cart",
+                emptyCart: "Your cart is currently empty",
+                startShopping: "Start Shopping Now",
+                billAndDelivery: "Billing & Delivery Details",
+                subtotal: "Subtotal:",
+                deliveryFee: "Delivery Fee:",
+                total: "Grand Total:",
+                confirmOrder: "Confirm & Submit Order",
+                signIn: "Sign In",
+                signUp: "Sign Up",
+                signOut: "Sign Out",
+                appSettings: "App Settings",
+                appLang: "Language / لغة التطبيق",
+                navHome: "Home",
+                navCart: "Cart",
+                navAccount: "Account",
+                navSettings: "Settings",
+                saveAndContinue: "Save & Continue",
+                egp: "EGP",
+                kg: "kg",
+                addToCart: "Add to Cart",
+                guest: "Guest",
+                notLoggedIn: "Not Signed In",
+                pastOrders: "My Past Orders",
+                updateStatuses: "Update Statuses",
+                noOrders: "No past orders yet",
+                orderIdLabel: "Order ID:",
+                itemsLabel: "Items:"
+            }
+        };
+
+        const mockProducts = [
+            { id: "1", name: "طماطم بلدي", price: 0, category: "خضروات", unit: "كجم", image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400" },
+            { id: "2", name: "خيار", price: 0, category: "خضروات", unit: "كجم", image: "https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=400" }
+        ];
+
+        let state = {
+            lang: localStorage.getItem('miro_lang') || 'ar',
+            user: JSON.parse(localStorage.getItem('miro_user')) || null,
+            settings: {
+                scriptUrl: "https://script.google.com/macros/s/AKfycbxA-zkChiW8DkrYbcU2_FiqQflnLVWlEbbUHUMbfLKSLe4d6xdFHfF1qcleyTBV5L-1/exec",
+                deliveryFee: 11
+            },
+            cart: JSON.parse(localStorage.getItem('miro_cart')) || [],
+            products: mockProducts,
+            customers: [],
+            selectedCategory: 'all'
+        };
+
+        let tempRegistrationData = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            applyLanguageUI();
+            renderProducts(state.products);
+            updateCartUI();
+            updateProfileUI();
+            updateOrdersHistoryUI();
+            renderNotificationsUI();
+
+            fetchDataFromSheets();
+        });
+
+        function hideLoadingScreen() {
+            const loader = document.getElementById('loading-screen');
+            if (loader) {
+                loader.style.opacity = '0';
+                loader.style.visibility = 'hidden';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                }, 500);
+            }
+        }
+
+        function changeLanguage(newLang) {
+            state.lang = newLang;
+            localStorage.setItem('miro_lang', newLang);
+            document.documentElement.lang = newLang;
+            document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+            applyLanguageUI();
+            renderProducts(state.products);
+            updateCartUI();
+            updateProfileUI();
+            updateOrdersHistoryUI();
+        }
+
+        function applyLanguageUI() {
+            const l = i18n[state.lang];
+            const searchInput = document.getElementById('searchInput');
+            if(searchInput) searchInput.placeholder = state.lang === 'ar' ? 'ابحث عن خضار، فواكه...' : 'Search fruits, veggies...';
+            const langSelect = document.getElementById('langSelect');
+            if(langSelect) langSelect.value = state.lang;
+            
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (l[key]) el.textContent = l[key];
+            });
+
+            updateHeaderLocationUI();
+        }
+
+        function updateHeaderLocationUI() {
+            const locSpan = document.getElementById('deliveryHeaderLocation');
+            if (!locSpan) return;
+            if (state.user) {
+                const nameStr = state.user.name || '';
+                const addrStr = state.user.address || '';
+                locSpan.textContent = state.lang === 'ar' ? `التوصيل إلى: ${nameStr} - ${addrStr}` : `Deliver to: ${nameStr} - ${addrStr}`;
+            } else {
+                locSpan.textContent = i18n[state.lang].deliverTo;
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            const targetTab = document.getElementById(`tab-${tabName}`);
+            if(targetTab) targetTab.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-amazon-orange', 'font-bold');
+                btn.classList.add('text-gray-500');
+            });
+
+            const activeBtn = document.getElementById(`nav-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('text-amazon-orange', 'font-bold');
+                activeBtn.classList.remove('text-gray-500');
+            }
+
+            fetchDataFromSheets();
+        }
+
+        async function fetchDataFromSheets() {
+            if (!state.settings.scriptUrl) {
+                hideLoadingScreen();
+                return;
+            }
+            const baseUrl = state.settings.scriptUrl.trim();
+            const urlSep = baseUrl.includes('?') ? '&' : '?';
+
+            try {
+                const response = await fetch(`${baseUrl}${urlSep}action=getAll`, { redirect: 'follow' });
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.customers && Array.isArray(data.customers)) {
+                        state.customers = data.customers;
+
+                        if (state.user && state.user.phone) {
+                            const loggedPhone = String(state.user.phone).trim();
+                            const currentCustData = state.customers.find(c => String(c.phone).trim() === loggedPhone);
+
+                            if (currentCustData) {
+                                const statusStr = currentCustData.status ? String(currentCustData.status).trim() : 'قيد الانتظار';
+                                const isApproved = statusStr === 'مفعل' || statusStr === 'Approved';
+
+                                if (!isApproved) {
+                                    handleSignOut();
+                                    showToast(
+                                        state.lang === 'ar' ? "تم تسجيل الخروج: حسابك قيد المراجعة أو تم إيقافه من الإدارة" : "Signed out: Account pending or deactivated", 
+                                        "fa-triangle-exclamation"
+                                    );
+                                } else {
+                                    state.user.name = currentCustData.name || state.user.name;
+                                    state.user.address = currentCustData.address || state.user.address;
+                                    localStorage.setItem('miro_user', JSON.stringify(state.user));
+                                    updateProfileUI();
+                                }
+                            }
+                        }
+                    }
+
+                    if (data.orders && Array.isArray(data.orders)) {
+                        let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+                        
+                        let updatedLocalOrders = localOrders.map(local => {
+                            const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
+                            if (foundInSheet) {
+                                return { ...local, status: foundInSheet.status, date: foundInSheet.date || local.date };
+                            }
+                            return local;
+                        });
+
+                        if (state.user && state.user.phone) {
+                            const phoneClean = String(state.user.phone).trim();
+                            data.orders.forEach(sheetOrder => {
+                                if (String(sheetOrder.phone).trim() === phoneClean) {
+                                    const exists = updatedLocalOrders.some(l => String(l.id).trim() === String(sheetOrder.id).trim());
+                                    if (!exists) {
+                                        updatedLocalOrders.push(sheetOrder);
+                                    }
+                                }
+                            });
+                        }
+
+                        localStorage.setItem('miro_orders', JSON.stringify(updatedLocalOrders));
+                        updateOrdersHistoryUI();
+                    }
+
+                    let newProducts = [];
+                    if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+                        newProducts = data.products;
+                    } else if (Array.isArray(data) && data.length > 0) {
+                        newProducts = data;
+                    }
+
+                    if (newProducts.length > 0) {
+                        state.products = newProducts;
+                        state.cart = state.cart.map(cartItem => {
+                            const freshProduct = state.products.find(p => String(p.id) === String(cartItem.id));
+                            if (freshProduct) {
+                                return { ...cartItem, price: Number(freshProduct.price), name: freshProduct.name, image: freshProduct.image };
+                            }
+                            return cartItem;
+                        });
+                        saveCart();
+                        renderProducts(state.products);
+                    }
+
+                    let fetchedFee = null;
+                    if (data.settings && typeof data.settings.deliveryFee !== 'undefined') {
+                        fetchedFee = data.settings.deliveryFee;
+                    } else if (typeof data.deliveryFee !== 'undefined') {
+                        fetchedFee = data.deliveryFee;
+                    }
+
+                    if (fetchedFee !== null && !isNaN(fetchedFee)) {
+                        state.settings.deliveryFee = Number(fetchedFee);
+                    }
+
+                    updateCartUI();
+                }
+            } catch (err) {
+                console.log("Fetch error:", err);
+            } finally {
+                hideLoadingScreen();
+            }
+        }
+
+        function requestOrderCancellation(orderId) {
+            const confirmTitle = state.lang === 'ar' ? "إلغاء الطلب" : "Cancel Order";
+            const confirmMsg = state.lang === 'ar' ? "هل تريد حقاً إرسال طلب إلغاء لهذا الطلب؟" : "Are you sure you want to request cancellation for this order?";
+
+            openCustomConfirm(confirmTitle, confirmMsg, async () => {
+                try {
+                    const response = await fetch(state.settings.scriptUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'cancel',
+                            order_id: orderId
+                        })
+                    });
+                    const resData = await response.json();
+
+                    if (resData.status === "already_approved") {
+                        showToast(state.lang === 'ar' ? "عذراً، لا يمكن إلغاء الطلب لأنه تم قبوله بالفعل." : "Order cannot be cancelled as it's already approved.", "fa-circle-xmark");
+                    } else {
+                        showToast(state.lang === 'ar' ? "تم إرسال طلب الإلغاء بنجاح." : "Cancellation request sent successfully.", "fa-circle-check");
+                    }
+
+                    setTimeout(fetchDataFromSheets, 500);
+                } catch (e) {
+                    console.log("Error sending cancel request:", e);
+                }
+            });
+        }
+
+        function requestOrderUncancel(orderId) {
+            const confirmTitle = state.lang === 'ar' ? "التراجع عن الإلغاء" : "Revert Cancellation";
+            const confirmMsg = state.lang === 'ar' ? "هل تريد التراجع عن طلب إلغاء هذا الطلب وإعادته لقيد الانتظار؟" : "Do you want to revert the cancellation request?";
+
+            openCustomConfirm(confirmTitle, confirmMsg, async () => {
+                try {
+                    const response = await fetch(state.settings.scriptUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'uncancel',
+                            order_id: orderId
+                        })
+                    });
+                    const resData = await response.json();
+
+                    if (resData.status === "already_approved") {
+                        showToast(state.lang === 'ar' ? "عذراً، لا يمكن التعديل لأن الطلب تم قبوله بالفعل." : "Cannot revert, order is already approved.", "fa-circle-xmark");
+                    } else {
+                        showToast(state.lang === 'ar' ? "تم التراجع عن طلب الإلغاء واستمرار الطلب." : "Cancellation reverted successfully.", "fa-circle-check");
+                    }
+
+                    setTimeout(fetchDataFromSheets, 500);
+                } catch (e) {
+                    console.log("Error sending uncancel request:", e);
+                }
+            });
+        }
+
+        function updateOrdersHistoryUI() {
+            const container = document.getElementById('ordersHistoryContainer');
+            if (!container) return;
+
+            let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+            const l = i18n[state.lang];
+
+            if (localOrders.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 text-center py-2">${l.noOrders}</p>`;
+                return;
+            }
+
+            container.innerHTML = localOrders.map(order => {
+                const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
+                
+                const isCancelled = statusText.includes('تم الالغاء') || statusText.includes('تم الإلغاء') || statusText.includes('ملغي') || statusText.includes('Cancelled');
+                const isApproved = !isCancelled && (statusText.includes('تم') || statusText.includes('موافقة') || statusText.includes('مقبول'));
+                const isCancelRequested = !isCancelled && statusText.includes('إلغاء');
+
+                let statusBadgeClass = 'bg-yellow-100 text-yellow-800';
+                if (isCancelled) {
+                    statusBadgeClass = 'bg-red-100 text-red-700 border border-red-200';
+                } else if (isApproved) {
+                    statusBadgeClass = 'bg-green-100 text-green-700';
+                } else if (isCancelRequested) {
+                    statusBadgeClass = 'bg-orange-100 text-orange-800';
+                }
+
+                let actionButtonHtml = '';
+                if (isCancelled || isApproved) {
+                    actionButtonHtml = `<span class="text-gray-400 text-xs" title="لا يمكن التعديل"><i class="fa-solid fa-lock ${isCancelled ? 'text-red-500' : 'text-emerald-600'}"></i></span>`;
+                } else if (isCancelRequested) {
+                    actionButtonHtml = `
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded border border-orange-200">${state.lang === 'ar' ? 'قيد الإلغاء' : 'Cancelling'}</span>
+                        <button onclick="requestOrderUncancel('${order.id}')" class="text-emerald-700 hover:text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded border border-emerald-500 bg-emerald-50 hover:bg-emerald-100 transition flex items-center gap-1">
+                            <i class="fa-solid fa-rotate-left"></i> ${state.lang === 'ar' ? 'تراجع' : 'Revert'}
+                        </button>
+                    </div>`;
+                } else {
+                    actionButtonHtml = `<button onclick="requestOrderCancellation('${order.id}')" class="text-amber-800 hover:text-amber-900 font-bold text-[11px] px-2.5 py-0.5 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 transition">${state.lang === 'ar' ? 'طلب إلغاء' : 'Cancel'}</button>`;
+                }
+
+                return `
+                <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 space-y-1 relative">
+                    <div class="flex justify-between items-center font-bold text-gray-800">
+                        <span class="text-emerald-700">${state.lang === 'ar' ? 'الإجمالي:' : 'Total:'} ${order.total} ${l.egp}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] px-2 py-0.5 rounded font-bold ${statusBadgeClass}">
+                                ${statusText}
+                            </span>
+                            ${actionButtonHtml}
+                        </div>
+                    </div>
+                    <p class="text-gray-600 truncate">${l.itemsLabel} ${order.items}</p>
+                    <div class="flex justify-between items-center text-[10px] text-gray-500 font-semibold pt-1 border-t border-gray-200">
+                        <span>${l.orderIdLabel} <strong class="text-amazon-navy">${order.id}</strong></span>
+                        <span>${order.date || ''}</span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderProducts(list) {
+            const grid = document.getElementById('productsGrid');
+            const countLabel = document.getElementById('productCount');
+            const l = i18n[state.lang];
+
+            if (!grid) return;
+
+            const filtered = state.selectedCategory === 'all' ? list : list.filter(p => p.category === state.selectedCategory);
+            if (countLabel) countLabel.textContent = `(${filtered.length} ${state.lang === 'ar' ? 'منتج' : 'items'})`;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-2 text-center py-8 text-gray-400 text-xs">${state.lang === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products'}</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => {
+                let imgSrc = (p.image && p.image.length > 5) ? p.image : 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400';
+                
+                const cartItem = state.cart.find(item => String(item.id) === String(p.id));
+                const itemQty = cartItem ? cartItem.qty : 0;
+
+                let actionButtonHtml = '';
+                if (itemQty > 0) {
+                    actionButtonHtml = `
+                    <div class="flex items-center justify-between bg-gray-100 p-1 rounded-xl border border-gray-200">
+                        <button onclick="updateQty('${p.id}', 1)" class="w-8 h-8 bg-amazon-orange text-white font-black text-base rounded-lg flex items-center justify-center shadow-sm">+</button>
+                        <span class="font-black text-xs text-gray-800 px-3">${itemQty}</span>
+                        <button onclick="updateQty('${p.id}', -1)" class="w-8 h-8 bg-white text-gray-700 border border-gray-300 font-black text-base rounded-lg flex items-center justify-center shadow-sm">-</button>
+                    </div>
+                    `;
+                } else {
+                    actionButtonHtml = `
+                    <button onclick="addToCart('${p.id}')" class="w-full bg-amazon-button hover:bg-amazon-buttonHover text-gray-900 font-extrabold text-xs py-2 rounded-xl shadow-sm transition">
+                        + ${l.addToCart}
+                    </button>
+                    `;
+                }
+
+                return `
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                    <div>
+                        <div class="relative w-full h-28 mb-2 rounded-xl overflow-hidden bg-gray-50">
+                            <img src="${imgSrc}" onerror="this.src='https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400'" class="w-full h-full object-cover">
+                            <span class="absolute top-1.5 right-1.5 bg-amazon-navy/80 text-white text-[9px] px-2 py-0.5 rounded-full font-semibold">
+                                ${p.category || ''}
+                            </span>
+                        </div>
+                        <h4 class="font-bold text-gray-800 text-xs line-clamp-1 mb-0.5">${p.name}</h4>
+                        <div class="text-[10px] text-gray-400 mb-0.5">${state.lang === 'ar' ? 'السعر لكل' : 'Price per'} ${p.unit || l.kg}</div>
+                        <div class="flex items-baseline gap-1 mb-2">
+                            <span class="font-extrabold text-sm text-emerald-700">${p.price} ${l.egp}</span>
+                        </div>
+                    </div>
+                    <div>${actionButtonHtml}</div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function filterCategory(cat, btnEl) {
+            state.selectedCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(b => {
+                b.classList.remove('bg-amazon-navy', 'text-white', 'font-bold');
+                b.classList.add('bg-white', 'text-gray-700', 'border', 'border-gray-200');
+            });
+            if(btnEl) {
+                btnEl.classList.remove('bg-white', 'text-gray-700', 'border', 'border-gray-200');
+                btnEl.classList.add('bg-amazon-navy', 'text-white', 'font-bold');
+            }
+            renderProducts(state.products);
+        }
+
+        function filterProducts() {
+            const term = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!term) {
+                renderProducts(state.products);
+                return;
+            }
+            const filtered = state.products.filter(p => p.name.toLowerCase().includes(term) || (p.category && p.category.toLowerCase().includes(term)));
+            renderProducts(filtered);
+        }
+
+        function scrollToProducts() {
+            const sec = document.getElementById('productsSection');
+            if(sec) sec.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function addToCart(prodId) {
+            const prod = state.products.find(p => String(p.id) === String(prodId));
+            if (!prod) return;
+
+            const existing = state.cart.find(item => String(item.id) === String(prodId));
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                state.cart.push({ id: prod.id, name: prod.name, price: prod.price, image: prod.image, unit: prod.unit, qty: 1 });
+            }
+
+            saveCart();
+            renderProducts(state.products);
+            updateCartUI();
+        }
+
+        function updateQty(prodId, delta) {
+            const index = state.cart.findIndex(item => String(item.id) === String(prodId));
+            if (index !== -1) {
+                state.cart[index].qty += delta;
+                if (state.cart[index].qty <= 0) {
+                    state.cart.splice(index, 1);
+                }
+            }
+            saveCart();
+            renderProducts(state.products);
+            updateCartUI();
+        }
+
+        function saveCart() {
+            localStorage.setItem('miro_cart', JSON.stringify(state.cart));
+        }
+
+        function updateCartUI() {
+            const cartItemsContainer = document.getElementById('cartItems');
+            const cartEmpty = document.getElementById('cartEmpty');
+            const checkoutSection = document.getElementById('checkoutSection');
+            const cartBadge = document.getElementById('cartBadge');
+            const l = i18n[state.lang];
+
+            const totalQty = state.cart.reduce((sum, i) => sum + i.qty, 0);
+            if (cartBadge) cartBadge.textContent = totalQty;
+
+            if (!cartItemsContainer) return;
+
+            if (state.cart.length === 0) {
+                cartItemsContainer.innerHTML = '';
+                if(cartEmpty) cartEmpty.classList.remove('hidden');
+                if(checkoutSection) checkoutSection.classList.add('hidden');
+                return;
+            }
+
+            if(cartEmpty) cartEmpty.classList.add('hidden');
+            if(checkoutSection) checkoutSection.classList.remove('hidden');
+
+            cartItemsContainer.innerHTML = state.cart.map(item => `
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                    <div class="flex items-center gap-2.5">
+                        <img src="${item.image || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400'}" class="w-12 h-12 object-cover rounded-lg">
+                        <div>
+                            <h4 class="font-bold text-xs text-gray-800">${item.name}</h4>
+                            <div class="text-[10px] text-gray-500">${item.price} ${l.egp} × ${item.qty}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-black text-xs text-emerald-700">${item.price * item.qty} ${l.egp}</span>
+                        <div class="flex items-center gap-1 border rounded-lg bg-white p-0.5">
+                            <button onclick="updateQty('${item.id}', 1)" class="w-5 h-5 bg-gray-100 text-gray-700 font-bold text-xs rounded">+</button>
+                            <span class="text-xs font-bold px-1">${item.qty}</span>
+                            <button onclick="updateQty('${item.id}', -1)" class="w-5 h-5 bg-gray-100 text-gray-700 font-bold text-xs rounded">-</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
+
+            document.getElementById('subtotalPrice').textContent = `${subtotal} ${l.egp}`;
+            document.getElementById('deliveryFee').textContent = `${delivery} ${l.egp}`;
+            document.getElementById('grandTotalPrice').textContent = `${grandTotal} ${l.egp}`;
+        }
+
+        async function submitOrder() {
+            if (!state.user) {
+                showToast(state.lang === 'ar' ? "يرجى تسجيل الدخول أولاً لتأكيد الطلب!" : "Please sign in first to confirm order!", "fa-user-lock");
+                openLoginModal('signin');
+                return;
+            }
+
+            if (state.cart.length === 0) {
+                showToast(state.lang === 'ar' ? "سلة التسوق فارغة!" : "Cart is empty!", "fa-basket-shopping");
+                return;
+            }
+
+            const btn = document.getElementById('btnSubmitOrder');
+            if(btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> ${state.lang === 'ar' ? 'جاري إرسال الطلب...' : 'Sending order...'}`;
+            }
+
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
+            const itemsSummary = state.cart.map(i => `${i.name} (${i.qty} ${i.unit || 'كجم'})`).join(', ');
+
+            const payload = {
+                action: 'order',
+                name: state.user.name,
+                phone: state.user.phone,
+                address: state.user.address,
+                items: itemsSummary,
+                subtotal: subtotal,
+                delivery: delivery,
+                total: grandTotal,
+                payment: "كاش"
+            };
+
+            let newOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
+            const currentTime = new Date().toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true, year: 'numeric', month: '2-digit', day: '2-digit' });
+
+            try {
+                const response = await fetch(state.settings.scriptUrl, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const resData = await response.json();
+                if(resData.id) newOrderId = resData.id;
+            } catch (e) {
+                console.log("Error sending to Apps Script:", e);
+            }
+
+            let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+            localOrders.unshift({
+                id: newOrderId,
+                total: grandTotal,
+                items: itemsSummary,
+                address: state.user.address,
+                phone: state.user.phone,
+                status: 'قيد الانتظار',
+                date: currentTime
+            });
+            localStorage.setItem('miro_orders', JSON.stringify(localOrders));
+
+            state.cart = [];
+            saveCart();
+            renderProducts(state.products);
+            updateCartUI();
+            updateOrdersHistoryUI();
+
+            if(btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-check-circle text-base"></i> <span>${i18n[state.lang].confirmOrder}</span>`;
+            }
+
+            showToast(state.lang === 'ar' ? "تم إرسال طلبك بنجاح! شكراً لتسوقك من Miro MarkEt" : "Order sent successfully!", "fa-circle-check");
+            switchTab('account');
+            fetchDataFromSheets();
+        }
+
+        function updateProfileUI() {
+            const profileName = document.getElementById('profileName');
+            const profilePhone = document.getElementById('profilePhone');
+            const btnSignIn = document.getElementById('btnSignIn');
+            const btnSignUp = document.getElementById('btnSignUp');
+            const btnSignOut = document.getElementById('btnSignOut');
+            const l = i18n[state.lang];
+
+            if (state.user) {
+                if(profileName) profileName.textContent = state.user.name || l.guest;
+                if(profilePhone) profilePhone.textContent = state.user.phone || '';
+                if(btnSignIn) btnSignIn.classList.add('hidden');
+                if(btnSignUp) btnSignUp.classList.add('hidden');
+                if(btnSignOut) btnSignOut.classList.remove('hidden');
+            } else {
+                if(profileName) profileName.textContent = l.guest;
+                if(profilePhone) profilePhone.textContent = l.notLoggedIn;
+                if(btnSignIn) btnSignIn.classList.remove('hidden');
+                if(btnSignUp) btnSignUp.classList.remove('hidden');
+                if(btnSignOut) btnSignOut.classList.add('hidden');
+            }
+            updateHeaderLocationUI();
+        }
+
+        let authMode = 'signin';
+        function openLoginModal(mode = 'signin') {
+            setAuthMode(mode);
+            const modal = document.getElementById('loginModal');
+            if(modal) modal.classList.remove('hidden');
+        }
+
+        function closeLoginModal() {
+            const modal = document.getElementById('loginModal');
+            if(modal) modal.classList.add('hidden');
+            
+            document.getElementById('authFieldsStep1').classList.remove('hidden');
+            document.getElementById('authFieldsStep2').classList.add('hidden');
+        }
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            const tabIn = document.getElementById('modalTabSignIn');
+            const tabUp = document.getElementById('modalTabSignUp');
+            const signupFields = document.getElementById('signupOnlyFields');
+            const forgotPassBtn = document.getElementById('forgotPassContainer');
+
+            document.getElementById('authFieldsStep1').classList.remove('hidden');
+            document.getElementById('authFieldsStep2').classList.add('hidden');
+
+            if(mode === 'signin') {
+                tabIn.className = "w-1/2 pb-2 border-b-2 border-amazon-orange text-amazon-navy";
+                tabUp.className = "w-1/2 pb-2 text-gray-400 border-b-2 border-transparent";
+                if (signupFields) signupFields.classList.add('hidden');
+                if (forgotPassBtn) forgotPassBtn.classList.remove('hidden');
+            } else {
+                tabUp.className = "w-1/2 pb-2 border-b-2 border-amazon-orange text-amazon-navy";
+                tabIn.className = "w-1/2 pb-2 text-gray-400 border-b-2 border-transparent";
+                if (signupFields) signupFields.classList.remove('hidden');
+                if (forgotPassBtn) forgotPassBtn.classList.add('hidden');
+            }
+        }
+
+        function openForgotPasswordWhatsApp(event) {
+            if (event) event.preventDefault();
+            const phoneInput = document.getElementById('authPhone').value.trim();
+            const shopPhone = "201002669119";
+            
+            let msgText = "مرحباً ميرو ماركت، نسيت كلمة المرور الخاصة بحسابي وأرغب في استرجاعها.";
+            if (phoneInput) {
+                msgText += `\nرقم الهاتف: ${phoneInput}`;
+            }
+            
+            const waUrl = `https://wa.me/${shopPhone}?text=${encodeURIComponent(msgText)}`;
+            window.open(waUrl, '_blank');
+        }
+
+        async function handleAuthSubmit() {
+            const phone = document.getElementById('authPhone').value.trim();
+            const password = document.getElementById('authPass').value.trim();
+            const name = document.getElementById('authName').value.trim();
+            const email = document.getElementById('authEmail').value.trim();
+            const address = document.getElementById('authAddress').value.trim();
+
+            if (!phone || !password) {
+                showToast(state.lang === 'ar' ? "يرجى إدخال رقم الجوال وكلمة المرور!" : "Please enter phone and password!", "fa-circle-exclamation");
+                return;
+            }
+
+            await fetchDataFromSheets();
+
+            if (authMode === 'signin') {
+                const cust = state.customers.find(c => String(c.phone).trim() === phone);
+                if (!cust) {
+                    showToast(state.lang === 'ar' ? "رقم الهاتف غير مسجل! يرجى إنشاء حساب جديد." : "Phone not registered!", "fa-user-xmark");
+                    return;
+                }
+                if (String(cust.password).trim() !== password) {
+                    showToast(state.lang === 'ar' ? "كلمة المرور غير صحيحة!" : "Incorrect password!", "fa-lock");
+                    return;
+                }
+
+                const statusStr = cust.status ? String(cust.status).trim() : 'قيد الانتظار';
+                if (statusStr !== 'مفعل' && statusStr !== 'Approved') {
+                    showToast(state.lang === 'ar' ? "حسابك ما زال قيد المراجعة والتفعيل من الإدارة." : "Account pending approval.", "fa-clock");
+                    return;
+                }
+
+                state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
+                localStorage.setItem('miro_user', JSON.stringify(state.user));
+                updateProfileUI();
+                closeLoginModal();
+                updateCartUI();
+                showToast(state.lang === 'ar' ? "تم تسجيل الدخول بنجاح!" : "Signed in successfully!", "fa-circle-check");
+                fetchDataFromSheets();
+
+            } else {
+                const phoneRegex = /^0\d{10,}$/;
+                if (!phoneRegex.test(phone)) {
+                    showToast(state.lang === 'ar' ? "رقم الهاتف يجب أن يبدأ بـ 0 ولا يقل عن 11 رقم!" : "Phone must start with 0 and be at least 11 digits!", "fa-phone");
+                    return;
+                }
+
+                if (password.length < 4) {
+                    showToast(state.lang === 'ar' ? "كلمة المرور يجب ألا تقل عن 4 خانات!" : "Password must be at least 4 characters!", "fa-key");
+                    return;
+                }
+
+                const nameParts = name.trim().split(/\s+/);
+                if (!name || nameParts.length < 2) {
+                    showToast(state.lang === 'ar' ? "يرجى كتابة الاسم ثنائي على الأقل (اسمين بينهما مسافة)!" : "Name must consist of at least two words!", "fa-user-pen");
+                    return;
+                }
+
+                if (!email.includes('@') || !email.toLowerCase().includes('.com')) {
+                    showToast(state.lang === 'ar' ? "يرجى إدخال بريد إلكتروني صحيح يحتوي على @ و .com!" : "Email must contain @ and .com!", "fa-envelope");
+                    return;
+                }
+
+                if (!address) {
+                    showToast(state.lang === 'ar' ? "يرجى إدخال العنوان التفصيلي!" : "Please enter detailed address!", "fa-location-dot");
+                    return;
+                }
+
+                const existingCustomer = state.customers.find(c => String(c.phone).trim() === phone);
+                if (existingCustomer && existingCustomer.password && String(existingCustomer.password).trim() !== "") {
+                    showToast(state.lang === 'ar' ? "رقم الهاتف مسجل مسبقاً وله حساب! يرجى تسجيل الدخول مباشرة." : "Phone already registered!", "fa-triangle-exclamation");
+                    return;
+                }
+
+                state.user = { phone: phone, name: name, address: address };
+                localStorage.setItem('miro_user', JSON.stringify(state.user));
+                updateProfileUI();
+
+                tempRegistrationData = { phone, name, email, address, password };
+
+                try {
+                    await fetch(state.settings.scriptUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'register',
+                            phone: phone,
+                            name: name,
+                            email: email,
+                            address: address,
+                            password: password,
+                            status: 'قيد الانتظار'
+                        })
+                    });
+                } catch (e) {
+                    console.log("Error registering:", e);
+                }
+
+                const shopPhone = "201002669119";
+                const textMsg = encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:\nالاسم: ${name}\nالبريد الإلكتروني: ${email}\nرقم الجوال: ${phone}`);
+                const waUrl = `https://wa.me/${shopPhone}?text=${textMsg}`;
+                
+                document.getElementById('btnSendWhatsappMsg').href = waUrl;
+
+                document.getElementById('authFieldsStep1').classList.add('hidden');
+                document.getElementById('authFieldsStep2').classList.remove('hidden');
+                document.getElementById('approvalStatusMsg').textContent = "";
+            }
+        }
+
+        async function checkAdminApprovalStatus() {
+            const statusMsg = document.getElementById('approvalStatusMsg');
+            const btn = document.getElementById('btnCheckApproval');
+            
+            if (statusMsg) statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking approval status...";
+            if (btn) btn.disabled = true;
+
+            await fetchDataFromSheets();
+
+            if (tempRegistrationData || state.user) {
+                const checkPhone = state.user ? state.user.phone : tempRegistrationData.phone;
+                const cust = state.customers.find(c => String(c.phone).trim() === String(checkPhone).trim());
+                if (cust) {
+                    const statusStr = cust.status ? String(cust.status).trim() : 'قيد الانتظار';
+                    if (statusStr === 'مفعل' || statusStr === 'Approved') {
+                        closeLoginModal();
+                        updateCartUI();
+                        showToast(state.lang === 'ar' ? "تهانينا! تم تفعيل حسابك بنجاح." : "Account approved!", "fa-party-horn");
+                        return;
+                    }
+                }
+            }
+
+            if (statusMsg) statusMsg.textContent = state.lang === 'ar' ? "الحساب ما زال قيد الانتظار. يرجى إرسال رسالة الواتساب للإدارة." : "Account still pending.";
+            if (btn) btn.disabled = false;
+        }
+
+        function handleSignOut() {
+            state.user = null;
+            localStorage.removeItem('miro_user');
+            updateProfileUI();
+            updateOrdersHistoryUI();
+            showToast(state.lang === 'ar' ? "تم تسجيل الخروج" : "Signed out", "fa-right-from-bracket");
+        }
+    </script>
+</body>
+</html>
