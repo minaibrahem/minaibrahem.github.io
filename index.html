@@ -25,14 +25,14 @@
     
     await OneSignal.Slidedown.promptPush();
 
-    // استقبال الإشعار وإضافته للجرس وتحديث واجهة المستخدم فوراً
+    // استقبال الإشعار وإضافته للجرس وتحديث واجهة المستخدم فوراً بشكل عام
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
             var title = notifData.title || "إشعار جديد";
             var body = notifData.body || "";
             
-            // قراءة الإشعارات الحالية من الذاكرة المحلية مباشرة
+            // قراءة الإشعارات الحالية من الذاكرة المحلية
             let currentNotifs = JSON.parse(localStorage.getItem('miro_notifications')) || [];
             
             const newNotif = {
@@ -43,10 +43,11 @@
                 read: false
             };
             
+            // إضافة الإشعار في البداية وحفظه
             currentNotifs.unshift(newNotif);
             localStorage.setItem('miro_notifications', JSON.stringify(currentNotifs));
             
-            // تحديث متغير الـ appNotifications واجهة الجرس إذا كانت الدالات متاحة
+            // تحديث المتغير العام وعرض الواجهة فوراً
             if (typeof appNotifications !== 'undefined') {
                 appNotifications = currentNotifs;
             }
