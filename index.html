@@ -25,13 +25,25 @@
     
     await OneSignal.Slidedown.promptPush();
 
+    // تعديل مضمون لالتقاط الإشعار وعرضه فوراً في الجرس
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
             var title = notifData.title || "إشعار جديد";
             var body = notifData.body || "";
-            if (typeof addNotificationToCenter === 'function') {
-                addNotificationToCenter(title, body);
+            
+            // إضافة الإشعار فوراً لقائمة الإشعارات المحلية وتحديث واجهة الجرس
+            if (typeof appNotifications !== 'undefined' && typeof saveNotifications === 'function' && typeof renderNotificationsUI === 'function') {
+                const newNotif = {
+                    id: Date.now(),
+                    title: title,
+                    body: body,
+                    date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                    read: false
+                };
+                appNotifications.unshift(newNotif);
+                saveNotifications();
+                renderNotificationsUI();
             }
         }
     });
