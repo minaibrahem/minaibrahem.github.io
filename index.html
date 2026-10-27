@@ -25,7 +25,6 @@
     
     await OneSignal.Slidedown.promptPush();
 
-    // تعديل: التقاط الإشعارات الواردة وإضافتها تلقائياً لمركز الإشعارات (أيقونة الجرس)
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
@@ -492,7 +491,6 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
-            // إضافة علامة الهاتف إذا كان المستخدم مسجلاً بالفعل عند فتح التطبيق
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
@@ -976,7 +974,6 @@
                 state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
-                // تعديل: إضافة تگ رقم الهاتف إلى OneSignal عند تسجيل الدخول الناجح
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.User.addTag("user_phone", String(cust.phone).trim());
@@ -997,7 +994,6 @@
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
-                // تعديل: إضافة تگ رقم الهاتف إلى OneSignal عند التسجيل الجديد
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.User.addTag("user_phone", String(phone).trim());
@@ -1044,7 +1040,6 @@
         }
 
         function handleSignOut() {
-            // تعديل: إزالة تگ رقم الهاتف عند تسجيل الخروج
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.User.removeTag("user_phone");
