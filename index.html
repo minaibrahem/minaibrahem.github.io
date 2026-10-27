@@ -17,11 +17,9 @@
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
-      allowLocalhostAsSecureOrigin: true
-    });
+OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.login(String(phone).trim());
+});
     
     await OneSignal.Slidedown.promptPush();
 
