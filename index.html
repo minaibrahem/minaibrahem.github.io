@@ -25,29 +25,30 @@
       return OneSignal.Slidedown.promptPush();
     });
 
+    // الاستماع للإشعارات الواردة أثناء فتح التطبيق وتحديث الجرس فوراً
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
             var title = notifData.title || "إشعار جديد";
             var body = notifData.body || "";
             
-            let currentNotifs = JSON.parse(localStorage.getItem('miro_notifications')) || [];
-            const newNotif = {
-                id: Date.now(),
-                title: title,
-                body: body,
-                date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-                read: false
-            };
-            
-            currentNotifs.unshift(newNotif);
-            localStorage.setItem('miro_notifications', JSON.stringify(currentNotifs));
-            
-            if (typeof appNotifications !== 'undefined') {
-                appNotifications = currentNotifs;
-            }
-            if (typeof renderNotificationsUI === 'function') {
-                renderNotificationsUI();
+            // استدعاء دالة إضافة الإشعار للـ UI الموجودة في التطبيق مباشرة
+            if (typeof addNotificationToCenter === 'function') {
+                addNotificationToCenter(title, body);
+            } else {
+                // الطريقة الاحتياطية في حال لم تكن الدالة جاهزة
+                let currentNotifs = JSON.parse(localStorage.getItem('miro_notifications')) || [];
+                currentNotifs.unshift({
+                    id: Date.now(),
+                    title: title,
+                    body: body,
+                    date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                    read: false
+                });
+                localStorage.setItem('miro_notifications', JSON.stringify(currentNotifs));
+                if (typeof renderNotificationsUI === 'function') {
+                    renderNotificationsUI();
+                }
             }
         }
     });
