@@ -491,9 +491,6 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
-// تجربة إضافة إشعار للجرس عند فتح الصفحة
-    addNotificationToCenter("تجربة إشعار", "هذا إشعار تجريبي تم إضافته للجرس بنجاح");
-
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
@@ -561,7 +558,7 @@
             fetchDataFromSheets();
         }
 
-async function fetchDataFromSheets() {
+        async function fetchDataFromSheets() {
             if (!state.settings.scriptUrl) { hideLoadingScreen(); return; }
             const baseUrl = state.settings.scriptUrl.trim();
             const urlSep = baseUrl.includes('?') ? '&' : '?';
