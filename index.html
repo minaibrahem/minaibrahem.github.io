@@ -25,34 +25,13 @@
       return OneSignal.Slidedown.promptPush();
     });
 
-    // التقاط الإشعار فور وصوله وتحديث الجرس محلياً
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
             var title = notifData.title || "إشعار جديد";
             var body = notifData.body || "";
-            
-            // قراءة الإشعارات الحالية
-            let currentNotifs = JSON.parse(localStorage.getItem('miro_notifications')) || [];
-            
-            // إضافة الإشعار الجديد في البداية
-            currentNotifs.unshift({
-                id: Date.now(),
-                title: title,
-                body: body,
-                date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-                read: false
-            });
-            
-            // حفظ التحديثات في الذاكرة المحلية
-            localStorage.setItem('miro_notifications', JSON.stringify(currentNotifs));
-            
-            // تحديث متغير العرض وشاشة الجرس مباشرة إذا كانت الدوال معرفة
-            if (typeof appNotifications !== 'undefined') {
-                appNotifications = currentNotifs;
-            }
-            if (typeof renderNotificationsUI === 'function') {
-                renderNotificationsUI();
+            if (typeof addNotificationToCenter === 'function') {
+                addNotificationToCenter(title, body);
             }
         }
     });
