@@ -376,6 +376,10 @@
         }
 
         function addNotificationToCenter(title, body) {
+            // التحقق من عدم تكرار نفس الإشعار
+            const isDuplicate = appNotifications.some(n => n.title === title && n.body === body);
+            if (isDuplicate) return;
+
             const newNotif = {
                 id: Date.now(),
                 title: title,
@@ -491,6 +495,21 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
+            // إعداد المزامنة التلقائية الدورية كل 15 ثانية لتحديث الجرس والحالات خلف الكواليس
+            setInterval(() => {
+                fetchDataFromSheets(true);
+            }, 15000);
+
+            // المزامنة الفورية عند عودة المستخدم لفتح التطبيق أو التبديل إليه
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    fetchDataFromSheets(true);
+                }
+            });
+            window.addEventListener('focus', () => {
+                fetchDataFromSheets(true);
+            });
+
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
@@ -558,8 +577,8 @@
             fetchDataFromSheets();
         }
 
-        async function fetchDataFromSheets() {
-            if (!state.settings.scriptUrl) { hideLoadingScreen(); return; }
+        async function fetchDataFromSheets(isBackgroundSync = false) {
+            if (!state.settings.scriptUrl) { if (!isBackgroundSync) hideLoadingScreen(); return; }
             const baseUrl = state.settings.scriptUrl.trim();
             const urlSep = baseUrl.includes('?') ? '&' : '?';
             try {
@@ -591,7 +610,7 @@
                         let updatedLocalOrders = localOrders.map(local => {
                             const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
                             if (foundInSheet && foundInSheet.status !== local.status) {
-                                // إضافة إشعار تلقائي للجرس عند تغير حالة الطلب من الشيت
+                                // إضافة الإشعار تلقائياً داخل مركز الإشعارات وزيادة عداد الجرس
                                 addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
                             }
                             return foundInSheet ? { ...local, status: foundInSheet.status, date: foundInSheet.date || local.date } : local;
@@ -629,7 +648,9 @@
             } catch (err) {
                 console.log("Fetch error:", err);
             } finally {
-                hideLoadingScreen();
+                if (!isBackgroundSync) {
+                    hideLoadingScreen();
+                }
             }
         }
 
