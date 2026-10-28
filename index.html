@@ -579,7 +579,7 @@
             fetchDataFromSheets();
         }
 
-        async function fetchDataFromSheets() {
+async function fetchDataFromSheets() {
             if (!state.settings.scriptUrl) { hideLoadingScreen(); return; }
             const baseUrl = state.settings.scriptUrl.trim();
             const urlSep = baseUrl.includes('?') ? '&' : '?';
@@ -611,8 +611,13 @@
                         let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
                         let updatedLocalOrders = localOrders.map(local => {
                             const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
+                            if (foundInSheet && foundInSheet.status !== local.status) {
+                                // إضافة إشعار تلقائي للجرس عند تغير حالة الطلب من الشيت
+                                addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
+                            }
                             return foundInSheet ? { ...local, status: foundInSheet.status, date: foundInSheet.date || local.date } : local;
                         });
+                        
                         if (state.user && state.user.phone) {
                             const phoneClean = String(state.user.phone).trim();
                             data.orders.forEach(sheetOrder => {
