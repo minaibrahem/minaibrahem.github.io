@@ -20,5 +20,12 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "splash_screens": [
+    {
+      "src": "home.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
