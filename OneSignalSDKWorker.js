@@ -1,69 +1,68 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// معالجة الإشعارات الواردة في الخلفية لضمان ظهورها كـ Popup وتحديث الجرس حتى والهاتف مقفل
+// التقاط أي رسالة دفع في الخلفية وإجبار الهاتف على إظهار الـ Popup حتى والهاتف مقفل
 self.addEventListener('push', function(event) {
-  if (!event.data) return;
-  
-  try {
-    const data = event.data.json();
-    
-    // استخراج العنوان والرسالة بمرونة تامة لتشمل إشعارات جوجل شيت ولوحة التحكم
-    let title = data.title || data.headings?.en || data.custom?.a?.title || "Miro MarkEt 📦";
-    let message = data.alert || data.contents?.en || data.custom?.a?.alert || data.custom?.a?.message || "يوجد تحديث جديد لطلبك";
-    
-    let options = {
-      body: message,
-      icon: 'icon.png',
-      badge: 'icon.png',
-      vibrate: [300, 100, 300, 100, 300],
-      tag: 'miro-market-' + Date.now(),
-      renotify: true,
-      requireInteraction: true,
-      priority: 2, // أولوية قصوى لإيقاظ الشاشة وعرض الـ Popup والهاتف مقفل
-      android: {
-        channelId: 'fcm_default_channel',
-        sound: 'default'
-      },
-      data: data
-    };
+  let title = "Miro MarkEt 📦";
+  let message = "يوجد تحديث جديد لطلبك";
+  let payload = {};
 
-    event.waitUntil(
-      Promise.all([
-        // 1. إظهار الإشعار المنبثق (Popup) على الشاشة
-        self.registration.showNotification(title, options),
-        
-        // 2. إرسال إشارة لصفحة التطبيق المفتوحة لتحديث الجرس داخلياً
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'NEW_NOTIFICATION_RECEIVED',
-              title: title,
-              body: message,
-              data: data
-            });
-          });
-        })
-      ])
-    );
-  } catch (err) {
-    console.error("Error handling background push:", err);
+  if (event.data) {
+    try {
+      payload = event.data.json();
+      title = payload.title || payload.headings?.en || payload.headings?.ar || payload.custom?.a?.title || title;
+      message = payload.alert || payload.contents?.en || payload.contents?.ar || payload.custom?.a?.alert || message;
+    } catch (e) {
+      message = event.data.text() || message;
+    }
   }
+
+  let options = {
+    body: message,
+    icon: 'icon.png',
+    badge: 'icon.png',
+    vibrate: [300, 100, 300, 100, 300],
+    tag: 'miro-market-' + Date.now(),
+    renotify: true,
+    requireInteraction: true,
+    priority: 2, // أولوية قصوى لضمان ظهور الـ Popup وإيقاظ الشاشة
+    android: {
+      channelId: 'fcm_default_channel',
+      sound: 'default',
+      priority: 'high'
+    },
+    data: payload
+  };
+
+  event.waitUntil(
+    Promise.all([
+      // 1. إجبار الهاتف على إظهار الـ Popup الخارجي فوراً
+      self.registration.showNotification(title, options),
+      
+      // 2. إرسال تنبيه لتحديث الجرس داخل التطبيق المفتوح
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'NEW_NOTIFICATION_RECEIVED',
+            title: title,
+            body: message,
+            data: payload
+          });
+        });
+      })
+    ])
+  );
 });
 
-// التعامل مع الضغط على الإشعار لفتح التطبيق مباشرة
+// التعامل مع الضغط على الإشعار لفتح التطبيق
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (let i = 0; i < clientList.length; i++) {
         let client = clientList[i];
-        if ('focus' in client) {
-          return client.focus();
-        }
+        if ('focus' in client) return client.focus();
       }
-      if (clients.openWindow) {
-        return clients.openWindow('./index.html');
-      }
+      if (clients.openWindow) return clients.openWindow('./index.html');
     })
   );
 });
