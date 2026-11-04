@@ -18,40 +18,56 @@
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
-    await OneSignal.init({
-      appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
-      allowLocalhostAsSecureOrigin: true
-    });
-
     try {
-      await OneSignal.Slidedown.promptPush();
-    } catch(err) {}
+      // التحقق من الدومين لتجنب خطأ OneSignal Origin Restriction أثناء المعاينة
+      const currentHost = window.location.hostname;
+      const isAllowedOrigin = currentHost.includes('minaibrahem.github.io') || currentHost.includes('localhost') || currentHost.includes('127.0.0.1') || currentHost.includes('googusercontent.com') || currentHost.includes('scf.usercontent.goog');
 
-    // ربط المستخدم برقم الهاتف عبر الـ Tags وتجنب خطأ 409 Conflict نهائياً
-    let savedUser = localStorage.getItem('miro_user');
-    if (savedUser) {
+      if (!isAllowedOrigin) {
+        console.warn("OneSignal initialized outside permitted production domain.");
+      }
+
+      await OneSignal.init({
+        appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
+        allowLocalhostAsSecureOrigin: true
+      });
+
       try {
-        let uData = JSON.parse(savedUser);
-        if (uData && uData.phone) {
-          let cleanPhone = String(uData.phone).trim();
-          OneSignal.User.addTag("user_phone", cleanPhone);
-          console.log("OneSignal Tagged with phone successfully:", cleanPhone);
-        }
-      } catch(e) {}
-    }
+        await OneSignal.Slidedown.promptPush();
+      } catch(err) {
+        console.log("Slidedown error:", err);
+      }
 
-    OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
-        var notifData = event.notification;
-        if (notifData) {
-            var title = notifData.title || "إشعار جديد";
-            var body = notifData.body || "";
-            if (typeof addNotificationToCenter === 'function') {
-                addNotificationToCenter(title, body);
-            }
-        }
-    });
+      // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
+      let savedUser = localStorage.getItem('miro_user');
+      if (savedUser) {
+        try {
+          let uData = JSON.parse(savedUser);
+          if (uData && uData.phone) {
+            let cleanPhone = String(uData.phone).trim();
+            await OneSignal.login(cleanPhone);
+            OneSignal.User.addTag("user_phone", cleanPhone);
+            console.log("OneSignal auto-logged in with phone:", cleanPhone);
+          }
+        } catch(e) {}
+      }
+
+      OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+          var notifData = event.notification;
+          if (notifData) {
+              var title = notifData.title || "إشعار جديد";
+              var body = notifData.body || "";
+              if (typeof addNotificationToCenter === 'function') {
+                  addNotificationToCenter(title, body);
+              }
+          }
+      });
+    } catch (sdkErr) {
+      console.log("OneSignal init bypassed in preview environment:", sdkErr);
+    }
   });
 
+  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
@@ -531,6 +547,17 @@
             window.addEventListener('focus', () => {
                 fetchDataFromSheets(true);
             });
+
+            if (state.user && state.user.phone) {
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    try {
+                        let cleanPhone = String(state.user.phone).trim();
+                        await OneSignal.login(cleanPhone);
+                        OneSignal.User.addTag("user_phone", cleanPhone);
+                    } catch(e) {}
+                });
+            }
         });
 
         function hideLoadingScreen() {
@@ -1015,9 +1042,12 @@
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(function(OneSignal) {
-                    let cleanPhone = String(cust.phone).trim();
-                    OneSignal.User.addTag("user_phone", cleanPhone);
+                OneSignalDeferred.push(async function(OneSignal) {
+                    try {
+                        let cleanPhone = String(cust.phone).trim();
+                        await OneSignal.login(cleanPhone);
+                        OneSignal.User.addTag("user_phone", cleanPhone);
+                    } catch(e) {}
                 });
 
                 updateProfileUI();
@@ -1036,9 +1066,12 @@
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(function(OneSignal) {
-                    let cleanPhone = String(phone).trim();
-                    OneSignal.User.addTag("user_phone", cleanPhone);
+                OneSignalDeferred.push(async function(OneSignal) {
+                    try {
+                        let cleanPhone = String(phone).trim();
+                        await OneSignal.login(cleanPhone);
+                        OneSignal.User.addTag("user_phone", cleanPhone);
+                    } catch(e) {}
                 });
 
                 updateProfileUI();
@@ -1083,9 +1116,9 @@
 
         function handleSignOut() {
             window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(function(OneSignal) {
+            OneSignalDeferred.push(async function(OneSignal) {
                 try {
-                    OneSignal.User.removeTag("user_phone");
+                    await OneSignal.logout();
                 } catch(e) {}
             });
             state.user = null;
