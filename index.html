@@ -27,14 +27,14 @@
       await OneSignal.Slidedown.promptPush();
     } catch(err) {}
 
-    // التحقق من حالة تسجيل الدخول لمنع تكرار طلبات الـ PATCH وتجنب خطأ 409 Conflict
+    // التحقق من حالة المستخدم ومنع تكرار طلبات PATCH التي تسبب خطأ 409
     let savedUser = localStorage.getItem('miro_user');
     if (savedUser) {
       try {
         let uData = JSON.parse(savedUser);
         if (uData && uData.phone) {
           let cleanPhone = String(uData.phone).trim();
-          // التأكد من عدم إعادة تسجيل نفس الرقم إذا كان مسجلاً بالفعل
+          // تنفيذ الـ login فقط إذا لم يكن مسجلاً بنفس الرقم حالياً
           if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
             await OneSignal.login(cleanPhone);
             OneSignal.User.addTag("user_phone", cleanPhone);
