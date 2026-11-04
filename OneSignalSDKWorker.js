@@ -1,56 +1,58 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// معالجة الإشعارات الواردة في الخلفية لضمان ظهورها كـ Popup حتى لو الهاتف مقفل (سواء من OneSignal أو جوجل شيت)
+// معالجة شاملة لضمان ظهور الـ Popup والهاتف مقفل (سواء من OneSignal أو جوجل شيت)
 self.addEventListener('push', function(event) {
-  if (!event.data) return;
+  let payload = {};
   
-  try {
-    const data = event.data.json();
-    
-    // استخراج العنوان والرسالة بمرونة تامة لتدعم لوحة OneSignal وجوجل شيت API معاً
-    let title = data.title || data.headings?.en || data.custom?.a?.title || "Miro MarkEt 📦";
-    let message = data.alert || data.contents?.en || data.custom?.a?.alert || data.custom?.a?.message || "يوجد تحديث جديد لطلبك";
-    
-    let options = {
-      body: message,
-      icon: 'icon.png',
-      badge: 'icon.png',
-      vibrate: [300, 100, 300, 100, 300],
-      tag: 'miro-market-' + Date.now(), // تاج فريد لضمان عدم تداخل الإشعارات
-      renotify: true,
-      requireInteraction: true, // يظل الإشعار ظاهراً حتى يتفاعل معه المستخدم
-      priority: 2, // أولوية قصوى لضمان إيقاظ الشاشة والـ Popup
-      android: {
-        channelId: 'fcm_default_channel',
-        sound: 'default'
-      },
-      data: data
-    };
-
-    event.waitUntil(
-      Promise.all([
-        // 1. إظهار الإشعار المنبثق (Popup) حتى والهاتف مقفل
-        self.registration.showNotification(title, options),
-        
-        // 2. إرسال إشارة لصفحة التطبيق لتحديث الجرس داخلياً إذا كانت مفتوحة
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'NEW_NOTIFICATION_RECEIVED',
-              title: title,
-              body: message,
-              data: data
-            });
-          });
-        })
-      ])
-    );
-  } catch (err) {
-    console.error("Error handling background push:", err);
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (e) {
+      payload = { body: event.data.text() };
+    }
   }
+  
+  // استخراج العنوان والرسالة باحترافية من كل الاحتمالات الممكنة لإرسال جوجل شيت أو لوحة التحكم
+  let title = payload.headings?.en || payload.title || payload.custom?.a?.title || "Miro MarkEt 📦";
+  let message = payload.contents?.en || payload.alert || payload.body || payload.custom?.a?.alert || payload.custom?.a?.message || "يوجد تحديث جديد لطلبك";
+
+  let options = {
+    body: message,
+    icon: 'icon.png',
+    badge: 'icon.png',
+    vibrate: [300, 100, 300, 100, 300],
+    tag: 'miro-market-' + Date.now(),
+    renotify: true,
+    requireInteraction: true, // يظل الإشعار ظاهراً على الشاشة حتى يتفاعل معه المستخدم
+    priority: 2, // أولوية قصوى لإيقاظ الشاشة وعرض الـ Popup والجهد مقفل
+    android: {
+      channelId: 'fcm_default_channel',
+      sound: 'default'
+    },
+    data: payload
+  };
+
+  event.waitUntil(
+    Promise.all([
+      // 1. إظهار الإشعار المنبثق كـ Popup فوري
+      self.registration.showNotification(title, options),
+      
+      // 2. إرسال البيانات للواجهة لتحديث الجرس داخلياً
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'NEW_NOTIFICATION_RECEIVED',
+            title: title,
+            body: message,
+            data: payload
+          });
+        });
+      })
+    ])
+  );
 });
 
-// التعامل مع الضغط على الإشعار لفتح التطبيق مباشرة
+// التعامل مع الضغط على الإشعار لفتح التطبيق
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
