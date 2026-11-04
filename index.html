@@ -25,6 +25,7 @@
       return OneSignal.Slidedown.promptPush();
     });
 
+    // التقاط الإشعارات المباشرة وإضافتها للجرس وعرضها
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
@@ -36,6 +37,17 @@
         }
     });
   });
+
+  // استقبال الرسائل من الـ Service Worker (لضمان إظهار إشعارات جوجل شيت وتحديث الجرس)
+  if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
+              if (typeof addNotificationToCenter === 'function') {
+                  addNotificationToCenter(event.data.title, event.data.body);
+              }
+          }
+      });
+  }
 </script>
 
     <script>
@@ -376,7 +388,6 @@
         }
 
         function addNotificationToCenter(title, body) {
-            // التحقق من عدم تكرار نفس الإشعار
             const isDuplicate = appNotifications.some(n => n.title === title && n.body === body);
             if (isDuplicate) return;
 
@@ -495,12 +506,10 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
-            // إعداد المزامنة التلقائية الدورية كل 15 ثانية لتحديث الجرس والحالات خلف الكواليس
             setInterval(() => {
                 fetchDataFromSheets(true);
             }, 15000);
 
-            // المزامنة الفورية عند عودة المستخدم لفتح التطبيق أو التبديل إليه
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') {
                     fetchDataFromSheets(true);
@@ -610,7 +619,6 @@
                         let updatedLocalOrders = localOrders.map(local => {
                             const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
                             if (foundInSheet && foundInSheet.status !== local.status) {
-                                // إضافة الإشعار تلقائياً داخل مركز الإشعارات وزيادة عداد الجرس
                                 addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
                             }
                             return foundInSheet ? { ...local, status: foundInSheet.status, date: foundInSheet.date || local.date } : local;
