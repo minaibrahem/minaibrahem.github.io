@@ -1,6 +1,5 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// التقاط إشارات الـ Push الفعلية لإظهار Popup منبثق وإيقاظ الهاتف حتى وهو مقفل
 self.addEventListener('push', function(event) {
   let title = "Miro MarkEt 📦";
   let message = "يوجد تحديث جديد لطلبك";
@@ -24,7 +23,7 @@ self.addEventListener('push', function(event) {
     tag: 'miro-market-' + Date.now(),
     renotify: true,
     requireInteraction: true,
-    priority: 2, // أولوية قصوى لضمان ظهور البوب نوتيفيكيشن والهاتف مغلق
+    priority: 2, // أولوية قصوى لإيقاظ الشاشة والهاتف مقفل
     android: {
       channelId: 'fcm_default_channel',
       sound: 'default',
@@ -35,10 +34,7 @@ self.addEventListener('push', function(event) {
 
   event.waitUntil(
     Promise.all([
-      // 1. إظهار الإشعار المرئي المنبثق (Popup) على الشاشة
       self.registration.showNotification(title, options),
-      
-      // 2. إرسال إشارة لتحديث جرس الإشعارات داخل التطبيق إذا كان مفتوحاً في الخلفية
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
         clients.forEach(client => {
           client.postMessage({
@@ -53,7 +49,6 @@ self.addEventListener('push', function(event) {
   );
 });
 
-// التعامل مع النقر على الإشعار لفتح التطبيق مباشرة
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
