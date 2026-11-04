@@ -1,6 +1,6 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// معالجة الإشعارات الواردة في الخلفية لضمان ظهورها كـ Popup حتى لو الهاتف مقفل (سواء من OneSignal أو جوجل شيت)
+// معالجة الإشعارات الواردة في الخلفية لضمان ظهورها كـ Popup وتحديث الجرس حتى والهاتف مقفل
 self.addEventListener('push', function(event) {
   if (!event.data) return;
   
@@ -29,10 +29,10 @@ self.addEventListener('push', function(event) {
 
     event.waitUntil(
       Promise.all([
-        // 1. إظهار الإشعار المنبثق (Popup)
+        // 1. إظهار الإشعار المنبثق (Popup) على الشاشة
         self.registration.showNotification(title, options),
         
-        // 2. إرسال إشارة لصفحة التطبيق لتحديث الجرس داخلياً
+        // 2. إرسال إشارة لصفحة التطبيق المفتوحة لتحديث الجرس داخلياً
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
           clients.forEach(client => {
             client.postMessage({
