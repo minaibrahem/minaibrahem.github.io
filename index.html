@@ -25,20 +25,20 @@
 
     try {
       await OneSignal.Slidedown.promptPush();
-    } catch(err) {
-      console.log("Slidedown error:", err);
-    }
+    } catch(err) {}
 
-    // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
+    // التحقق من حالة تسجيل الدخول لمنع تكرار طلبات الـ PATCH وتجنب خطأ 409 Conflict
     let savedUser = localStorage.getItem('miro_user');
     if (savedUser) {
       try {
         let uData = JSON.parse(savedUser);
         if (uData && uData.phone) {
           let cleanPhone = String(uData.phone).trim();
-          await OneSignal.login(cleanPhone);
-          OneSignal.User.addTag("user_phone", cleanPhone);
-          console.log("OneSignal auto-logged in with phone:", cleanPhone);
+          // التأكد من عدم إعادة تسجيل نفس الرقم إذا كان مسجلاً بالفعل
+          if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
+            await OneSignal.login(cleanPhone);
+            OneSignal.User.addTag("user_phone", cleanPhone);
+          }
         }
       } catch(e) {}
     }
@@ -55,7 +55,6 @@
     });
   });
 
-  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
@@ -535,15 +534,6 @@
             window.addEventListener('focus', () => {
                 fetchDataFromSheets(true);
             });
-
-            if (state.user && state.user.phone) {
-                window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
-                    let cleanPhone = String(state.user.phone).trim();
-                    await OneSignal.login(cleanPhone);
-                    OneSignal.User.addTag("user_phone", cleanPhone);
-                });
-            }
         });
 
         function hideLoadingScreen() {
@@ -1030,8 +1020,10 @@
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     let cleanPhone = String(cust.phone).trim();
-                    await OneSignal.login(cleanPhone);
-                    OneSignal.User.addTag("user_phone", cleanPhone);
+                    if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
+                        await OneSignal.login(cleanPhone);
+                        OneSignal.User.addTag("user_phone", cleanPhone);
+                    }
                 });
 
                 updateProfileUI();
@@ -1052,8 +1044,10 @@
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     let cleanPhone = String(phone).trim();
-                    await OneSignal.login(cleanPhone);
-                    OneSignal.User.addTag("user_phone", cleanPhone);
+                    if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
+                        await OneSignal.login(cleanPhone);
+                        OneSignal.User.addTag("user_phone", cleanPhone);
+                    }
                 });
 
                 updateProfileUI();
