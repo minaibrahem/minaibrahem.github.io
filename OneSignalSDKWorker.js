@@ -1,39 +1,45 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// معالجة الإشعارات الواردة وإظهار الـ Popup وتحديث الجرس معاً
+// معالجة الإشعارات الواردة في الخلفية لضمان ظهورها كـ Popup حتى لو الهاتف مقفل (سواء من OneSignal أو جوجل شيت)
 self.addEventListener('push', function(event) {
   if (!event.data) return;
   
   try {
-    const payload = event.data.json();
+    const data = event.data.json();
     
-    // استخراج العنوان والرسالة بمرونة لتدعم إشعارات لوحة OneSignal أو جوجل شيت API
-    let title = payload.title || payload.headings?.en || payload.custom?.a?.title || "Miro MarkEt 📦";
-    let message = payload.alert || payload.contents?.en || payload.custom?.a?.alert || payload.custom?.a?.message || "تحديث جديد لطلبك";
+    // استخراج العنوان والرسالة بمرونة تامة لتدعم لوحة OneSignal وجوجل شيت API معاً
+    let title = data.title || data.headings?.en || data.custom?.a?.title || "Miro MarkEt 📦";
+    let message = data.alert || data.contents?.en || data.custom?.a?.alert || data.custom?.a?.message || "يوجد تحديث جديد لطلبك";
     
     let options = {
       body: message,
       icon: 'icon.png',
       badge: 'icon.png',
-      vibrate: [300, 100, 300],
-      tag: 'miro-market-' + Date.now(),
+      vibrate: [300, 100, 300, 100, 300],
+      tag: 'miro-market-' + Date.now(), // تاج فريد لضمان عدم تداخل الإشعارات
       renotify: true,
-      requireInteraction: true,
-      data: payload
+      requireInteraction: true, // يظل الإشعار ظاهراً حتى يتفاعل معه المستخدم
+      priority: 2, // أولوية قصوى لضمان إيقاظ الشاشة والـ Popup
+      android: {
+        channelId: 'fcm_default_channel',
+        sound: 'default'
+      },
+      data: data
     };
 
-    // 1. إظهار الإشعار المنبثق (Popup) على شاشة الهاتف
     event.waitUntil(
       Promise.all([
+        // 1. إظهار الإشعار المنبثق (Popup) حتى والهاتف مقفل
         self.registration.showNotification(title, options),
-        // 2. إرسال رسالة لصفحة التطبيق المفتوحة لتحديث جرس الإشعارات داخلياً
+        
+        // 2. إرسال إشارة لصفحة التطبيق لتحديث الجرس داخلياً إذا كانت مفتوحة
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
           clients.forEach(client => {
             client.postMessage({
               type: 'NEW_NOTIFICATION_RECEIVED',
               title: title,
               body: message,
-              data: payload
+              data: data
             });
           });
         })
@@ -44,7 +50,7 @@ self.addEventListener('push', function(event) {
   }
 });
 
-// التعامل مع الضغط على الإشعار لفتح التطبيق
+// التعامل مع الضغط على الإشعار لفتح التطبيق مباشرة
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
