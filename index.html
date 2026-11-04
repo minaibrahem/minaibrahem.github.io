@@ -27,18 +27,16 @@
       await OneSignal.Slidedown.promptPush();
     } catch(err) {}
 
-    // التحقق من حالة المستخدم ومنع تكرار طلبات PATCH التي تسبب خطأ 409
+    // ربط المستخدم برقم الهاتف عبر الـ Tags وتجنب خطأ 409 Conflict نهائياً
     let savedUser = localStorage.getItem('miro_user');
     if (savedUser) {
       try {
         let uData = JSON.parse(savedUser);
         if (uData && uData.phone) {
           let cleanPhone = String(uData.phone).trim();
-          // تنفيذ الـ login فقط إذا لم يكن مسجلاً بنفس الرقم حالياً
-          if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
-            await OneSignal.login(cleanPhone);
-            OneSignal.User.addTag("user_phone", cleanPhone);
-          }
+          // إسناد رقم الهاتف كتاج أساسي للتوجيه بدون تداخل الـ login
+          OneSignal.User.addTag("user_phone", cleanPhone);
+          console.log("OneSignal Tagged with phone successfully:", cleanPhone);
         }
       } catch(e) {}
     }
