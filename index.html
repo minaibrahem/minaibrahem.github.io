@@ -17,26 +17,31 @@
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  window.OneSignalDeferred.push(function(OneSignal) {
-    OneSignal.init({
+  window.OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
       appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
       allowLocalhostAsSecureOrigin: true
-    }).then(function() {
-      return OneSignal.Slidedown.promptPush();
-    }).then(function() {
-      // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً إن وُجد لتفعيل الـ Popup الخارجي
-      let savedUser = localStorage.getItem('miro_user');
-      if (savedUser) {
-        try {
-          let uData = JSON.parse(savedUser);
-          if (uData && uData.phone) {
-            let cleanPhone = String(uData.phone).trim();
-            OneSignal.login(cleanPhone);
-            OneSignal.User.addTag("user_phone", cleanPhone);
-          }
-        } catch(e) {}
-      }
     });
+
+    try {
+      await OneSignal.Slidedown.promptPush();
+    } catch(err) {
+      console.log("Slidedown error:", err);
+    }
+
+    // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
+    let savedUser = localStorage.getItem('miro_user');
+    if (savedUser) {
+      try {
+        let uData = JSON.parse(savedUser);
+        if (uData && uData.phone) {
+          let cleanPhone = String(uData.phone).trim();
+          await OneSignal.login(cleanPhone);
+          OneSignal.User.addTag("user_phone", cleanPhone);
+          console.log("OneSignal auto-logged in with phone:", cleanPhone);
+        }
+      } catch(e) {}
+    }
 
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
@@ -535,7 +540,7 @@
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     let cleanPhone = String(state.user.phone).trim();
-                    OneSignal.login(cleanPhone);
+                    await OneSignal.login(cleanPhone);
                     OneSignal.User.addTag("user_phone", cleanPhone);
                 });
             }
@@ -1025,7 +1030,7 @@
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     let cleanPhone = String(cust.phone).trim();
-                    OneSignal.login(cleanPhone);
+                    await OneSignal.login(cleanPhone);
                     OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
@@ -1047,7 +1052,7 @@
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     let cleanPhone = String(phone).trim();
-                    OneSignal.login(cleanPhone);
+                    await OneSignal.login(cleanPhone);
                     OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
