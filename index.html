@@ -25,20 +25,20 @@
 
     try {
       await OneSignal.Slidedown.promptPush();
-    } catch(err) {
-      console.log("Slidedown error:", err);
-    }
+    } catch(err) {}
 
-    // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
+    // ربط المستخدم برقم هاتفه فقط إذا لم يكن مرتبطاً بالفعل لتجنب خطأ 409 Conflict
     let savedUser = localStorage.getItem('miro_user');
     if (savedUser) {
       try {
         let uData = JSON.parse(savedUser);
         if (uData && uData.phone) {
           let cleanPhone = String(uData.phone).trim();
-          await OneSignal.login(cleanPhone);
-          OneSignal.User.addTag("user_phone", cleanPhone);
-          console.log("OneSignal auto-logged in with phone:", cleanPhone);
+          if (OneSignal.User.externalId !== cleanPhone) {
+            await OneSignal.login(cleanPhone);
+            OneSignal.User.addTag("user_phone", cleanPhone);
+            console.log("OneSignal successfully logged in with phone:", cleanPhone);
+          }
         }
       } catch(e) {}
     }
@@ -55,7 +55,6 @@
     });
   });
 
-  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
