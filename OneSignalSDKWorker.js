@@ -1,6 +1,6 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// التقاط أي رسالة دفع في الخلفية وإجبار الهاتف على إظهار الـ Popup حتى والهاتف مقفل
+// معالجة دفع الإشعارات في الخلفية لضمان الـ Popup وتحديث الجرس معاً
 self.addEventListener('push', function(event) {
   let title = "Miro MarkEt 📦";
   let message = "يوجد تحديث جديد لطلبك";
@@ -10,7 +10,7 @@ self.addEventListener('push', function(event) {
     try {
       payload = event.data.json();
       title = payload.title || payload.headings?.en || payload.headings?.ar || payload.custom?.a?.title || title;
-      message = payload.alert || payload.contents?.en || payload.contents?.ar || payload.custom?.a?.alert || message;
+      message = payload.alert || payload.contents?.en || payload.contents?.ar || payload.custom?.a?.alert || payload.custom?.a?.message || message;
     } catch (e) {
       message = event.data.text() || message;
     }
@@ -24,7 +24,7 @@ self.addEventListener('push', function(event) {
     tag: 'miro-market-' + Date.now(),
     renotify: true,
     requireInteraction: true,
-    priority: 2, // أولوية قصوى لضمان ظهور الـ Popup وإيقاظ الشاشة
+    priority: 2, // أولوية قصوى لضمان الـ Popup وإيقاظ الشاشة
     android: {
       channelId: 'fcm_default_channel',
       sound: 'default',
@@ -35,10 +35,10 @@ self.addEventListener('push', function(event) {
 
   event.waitUntil(
     Promise.all([
-      // 1. إجبار الهاتف على إظهار الـ Popup الخارجي فوراً
+      // 1. إظهار الإشعار المنبثق على الشاشة (Popup)
       self.registration.showNotification(title, options),
       
-      // 2. إرسال تنبيه لتحديث الجرس داخل التطبيق المفتوح
+      // 2. إرسال بيانات الإشعار لجميع نوافذ التطبيق المفتوحة لتحديث الجرس فوراً
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
         clients.forEach(client => {
           client.postMessage({
