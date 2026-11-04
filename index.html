@@ -23,6 +23,19 @@
       allowLocalhostAsSecureOrigin: true
     }).then(function() {
       return OneSignal.Slidedown.promptPush();
+    }).then(function() {
+      // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً إن وُجد لتفعيل الـ Popup الخارجي
+      let savedUser = localStorage.getItem('miro_user');
+      if (savedUser) {
+        try {
+          let uData = JSON.parse(savedUser);
+          if (uData && uData.phone) {
+            let cleanPhone = String(uData.phone).trim();
+            OneSignal.login(cleanPhone);
+            OneSignal.User.addTag("user_phone", cleanPhone);
+          }
+        } catch(e) {}
+      }
     });
 
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
@@ -521,7 +534,9 @@
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.User.addTag("user_phone", String(state.user.phone).trim());
+                    let cleanPhone = String(state.user.phone).trim();
+                    OneSignal.login(cleanPhone);
+                    OneSignal.User.addTag("user_phone", cleanPhone);
                 });
             }
         });
@@ -1009,7 +1024,9 @@
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.User.addTag("user_phone", String(cust.phone).trim());
+                    let cleanPhone = String(cust.phone).trim();
+                    OneSignal.login(cleanPhone);
+                    OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
                 updateProfileUI();
@@ -1029,7 +1046,9 @@
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    await OneSignal.User.addTag("user_phone", String(phone).trim());
+                    let cleanPhone = String(phone).trim();
+                    OneSignal.login(cleanPhone);
+                    OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
                 updateProfileUI();
@@ -1075,7 +1094,7 @@
         function handleSignOut() {
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.User.removeTag("user_phone");
+                await OneSignal.logout();
             });
             state.user = null;
             localStorage.removeItem('miro_orders');
