@@ -25,7 +25,6 @@
       return OneSignal.Slidedown.promptPush();
     });
 
-    // التقاط الإشعارات المباشرة وإضافتها للجرس وعرضها
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
         var notifData = event.notification;
         if (notifData) {
@@ -38,7 +37,7 @@
     });
   });
 
-  // استقبال الرسائل من الـ Service Worker (لضمان إظهار إشعارات جوجل شيت وتحديث الجرس)
+  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
@@ -1079,6 +1078,7 @@
                 await OneSignal.User.removeTag("user_phone");
             });
             state.user = null;
+            localStorage.removeItem('miro_orders');
             localStorage.removeItem('miro_user');
             updateProfileUI();
             updateOrdersHistoryUI();
