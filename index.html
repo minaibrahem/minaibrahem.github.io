@@ -34,7 +34,6 @@
         let uData = JSON.parse(savedUser);
         if (uData && uData.phone) {
           let cleanPhone = String(uData.phone).trim();
-          // إسناد رقم الهاتف كتاج أساسي للتوجيه بدون تداخل الـ login
           OneSignal.User.addTag("user_phone", cleanPhone);
           console.log("OneSignal Tagged with phone successfully:", cleanPhone);
         }
@@ -1016,12 +1015,9 @@
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
+                OneSignalDeferred.push(function(OneSignal) {
                     let cleanPhone = String(cust.phone).trim();
-                    if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
-                        await OneSignal.login(cleanPhone);
-                        OneSignal.User.addTag("user_phone", cleanPhone);
-                    }
+                    OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
                 updateProfileUI();
@@ -1040,12 +1036,9 @@
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
+                OneSignalDeferred.push(function(OneSignal) {
                     let cleanPhone = String(phone).trim();
-                    if (!OneSignal.User.externalId || OneSignal.User.externalId !== cleanPhone) {
-                        await OneSignal.login(cleanPhone);
-                        OneSignal.User.addTag("user_phone", cleanPhone);
-                    }
+                    OneSignal.User.addTag("user_phone", cleanPhone);
                 });
 
                 updateProfileUI();
@@ -1090,8 +1083,10 @@
 
         function handleSignOut() {
             window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.logout();
+            OneSignalDeferred.push(function(OneSignal) {
+                try {
+                    OneSignal.User.removeTag("user_phone");
+                } catch(e) {}
             });
             state.user = null;
             localStorage.removeItem('miro_orders');
