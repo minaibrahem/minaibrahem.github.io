@@ -52,7 +52,9 @@
         } catch(e) {}
       }
 
-      OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+          // منع عرض الإشعار المزدوج محلياً إذا كان OneSignal سيعرضه تلقائياً
+          // event.preventDefault(); // يمكنك إلغاء التعليق إذا أردت إيقاف العرض المحلي المزدوج
           var notifData = event.notification;
           if (notifData) {
               var title = notifData.title || "إشعار جديد";
@@ -62,10 +64,6 @@
               }
           }
       });
-    } catch (sdkErr) {
-      console.log("OneSignal init bypassed in preview environment:", sdkErr);
-    }
-  });
 
   // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
