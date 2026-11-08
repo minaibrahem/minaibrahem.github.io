@@ -52,13 +52,15 @@
         } catch(e) {}
       }
 
-     OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
-          // منع عرض الإشعار المزدوج محلياً إذا كان OneSignal سيعرضه تلقائياً
-          // event.preventDefault(); // يمكنك إلغاء التعليق إذا أردت إيقاف العرض المحلي المزدوج
+OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+          // منع العرض المحلي المزدوج للإشعار
+          event.preventDefault(); 
+          
           var notifData = event.notification;
           if (notifData) {
               var title = notifData.title || "إشعار جديد";
               var body = notifData.body || "";
+              // إضافة الإشعار لمركز الإشعارات (الجرس) بصمت دون إظهار نافذة منبثقة مكررة
               if (typeof addNotificationToCenter === 'function') {
                   addNotificationToCenter(title, body);
               }
