@@ -63,12 +63,12 @@
           }
       });
 
-      // منع فتح المتصفح الخارجي وتوجيه النقر لداخل نافذة التطبيق المستقل
+      // تحسين معالجة النقر لضمان التوجيه الداخلي ضمن نطاق التطبيق المستقل
       OneSignal.Notifications.addEventListener('click', function(event) {
           try {
               event.preventDefault();
-              const targetUrl = event.notification.launchURL || window.location.href;
-              window.location.href = targetUrl;
+              const targetUrl = (event.notification && event.notification.launchURL) ? event.notification.launchURL : window.location.href;
+              window.location.assign(targetUrl);
           } catch(e) {
               console.log("Notification click handler error:", e);
           }
