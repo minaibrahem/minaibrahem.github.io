@@ -2,7 +2,7 @@
   "name": "Miro MarkEt",
   "short_name": "Miro MarkEt",
   "start_url": "./index.html",
-  "display": "Fullscreen",
+  "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#131921",
   "version": "1.0.0",
