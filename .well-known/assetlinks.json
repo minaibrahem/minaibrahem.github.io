@@ -4,9 +4,9 @@
     "target": {
       "namespace": "android_app",
       "package_name": "io.github.minaibrahem.twa",
-      "sha256_cert_fingerprints": [
+      "sha256_cert_fingerprints": 
        ["82:9A:95:33:13:A9:24:64:ED:2B:71:24:B7:88:A4:C1:74:C1:4F:9F:B9:57:A7:1E:D5:B8:16:CB:EF:11:94:93"]
-      ]
+      
     },
     "source": {
       "web": {
