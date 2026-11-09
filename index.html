@@ -62,6 +62,18 @@
               }
           }
       });
+
+      // منع فتح المتصفح الخارجي وتوجيه النقر لداخل نافذة التطبيق المستقل
+      OneSignal.Notifications.addEventListener('click', function(event) {
+          try {
+              event.preventDefault();
+              const targetUrl = event.notification.launchURL || window.location.href;
+              window.location.href = targetUrl;
+          } catch(e) {
+              console.log("Notification click handler error:", e);
+          }
+      });
+
     } catch (sdkErr) {
       console.log("OneSignal init bypassed in preview environment:", sdkErr);
     }
