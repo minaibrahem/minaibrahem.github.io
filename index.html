@@ -19,6 +19,7 @@
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
+      // التحقق من الدومين لتجنب خطأ OneSignal Origin Restriction أثناء المعاينة
       const currentHost = window.location.hostname;
       const isAllowedOrigin = currentHost.includes('minaibrahem.github.io') || currentHost.includes('localhost') || currentHost.includes('127.0.0.1') || currentHost.includes('googusercontent.com') || currentHost.includes('scf.usercontent.goog');
 
@@ -37,6 +38,7 @@
         console.log("Slidedown error:", err);
       }
 
+      // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
       let savedUser = localStorage.getItem('miro_user');
       if (savedUser) {
         try {
@@ -61,6 +63,7 @@
           }
       });
 
+      // تحسين معالجة النقر لضمان التوجيه الداخلي ضمن نطاق التطبيق المستقل
       OneSignal.Notifications.addEventListener('click', function(event) {
           try {
               event.preventDefault();
@@ -76,6 +79,7 @@
     }
   });
 
+  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
@@ -117,7 +121,6 @@
             font-family: 'Cairo', sans-serif;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
-            padding-top: env(safe-area-inset-top, 30px); /* حل مشكلة تداخل التطبيق مع شريط الحالة العلوي */
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -411,6 +414,7 @@
 
         window.alert = function(message) { showToast(message, 'fa-bell'); };
 
+        // نظام مركز الإشعارات (الجرس)
         let appNotifications = JSON.parse(localStorage.getItem('miro_notifications')) || [
             { id: 1, title: "مرحباً بك في Miro MarkEt", body: "استمتع بأفضل الخضروات والفواكه الطازجة بأفضل الأسعار.", date: "اليوم", read: false }
         ];
@@ -932,6 +936,7 @@
             const grandTotal = subtotal + delivery;
             const itemsSummary = state.cart.map(i => `${i.name} (${i.qty} ${i.unit || 'كجم'})`).join(', ');
 
+            // توليد معرف طلب فريد لمنع إرسال طلبات مكررة
             const clientRequestId = 'REQ-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
 
             const payload = {
