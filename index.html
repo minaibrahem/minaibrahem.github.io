@@ -429,22 +429,28 @@
         });
 
         function openInstaPaySmart(event) {
-            if (event) event.preventDefault();
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            const delivery = state.settings.deliveryFee || 11;
-            const grandTotal = subtotal + delivery;
+    if (event) event.preventDefault();
+    
+    // حساب الإجمالي الحالي من السلة + رسوم التوصيل
+    const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const delivery = state.settings.deliveryFee || 11;
+    const grandTotal = subtotal + delivery;
 
-            // نسخ المبلغ وحده للحافظة لسهولة لصقه داخل تطبيق انستاباي
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
-            }
+    // دمج المبلغ الإجمالي تلقائياً في رابط إنستاباي الخاص بك
+    const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
 
-            showToast(`تم نسخ المبلغ (${grandTotal} ج.م)، جاري فتح InstaPay...`, "fa-copy");
+    // نسخ المبلغ احتياطياً أيضاً للحافظة لضمان تجربة سلسة
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
+    }
 
-            setTimeout(() => {
-                window.location.href = "instapay://transfer";
-            }, 800);
-        }
+    showToast(`تم تحديث مبلغ التحويل (${grandTotal} ج.م)، جاري فتح InstaPay...`, "fa-wallet");
+
+    setTimeout(() => {
+        // فتح الرابط المباشر بالمبلغ
+        window.location.href = instapayLink;
+    }, 800);
+}
 
         function showToast(message, icon = 'fa-circle-info') {
             const toast = document.getElementById('customToast');
