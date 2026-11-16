@@ -280,12 +280,12 @@
                         </div>
                     </div>
 
-                    <!-- زر فتح انستاباي بالمبلغ المباشر -->
+                    <!-- زر فتح انستاباي الذكي مع نسخ الرقم والمبلغ تلقائياً -->
                     <div id="instapayActionBox" class="hidden space-y-2 pt-1">
-                        <a id="btnOpenInstaPay" href="#" onclick="openInstaPaySafely(event)" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-mobile-screen-button"></i> افتح تطبيق InstaPay للتحويل
-                        </a>
-                        <p class="text-[10px] text-gray-500 text-center">رقم التحويل المعتمد للمتجر: <strong class="text-purple-700" dir="ltr">01002669119</strong></p>
+                        <button type="button" onclick="openInstaPaySmart(event)" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-mobile-screen-button"></i> انسخ الرقم والمبلغ وافتح InstaPay
+                        </button>
+                        <p class="text-[10px] text-gray-500 text-center">رقم التحويل للمتجر: <strong class="text-purple-700" dir="ltr">01002669119</strong></p>
                     </div>
 
                     <button onclick="submitOrder()" id="btnSubmitOrder" class="w-full bg-amazon-button text-gray-900 font-extrabold text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 mt-2">
@@ -422,30 +422,28 @@
                 const box = document.getElementById('instapayActionBox');
                 if (e.target.value === 'InstaPay') {
                     box.classList.remove('hidden');
-                    updateInstaPayLink();
                 } else {
                     box.classList.add('hidden');
                 }
             }
         });
 
-        function updateInstaPayLink() {
-            const btn = document.getElementById('btnOpenInstaPay');
-            if (btn) {
-                btn.href = `instapay://transfer`;
-            }
-        }
-
-        function openInstaPaySafely(event) {
+        function openInstaPaySmart(event) {
             if (event) event.preventDefault();
-            const instapayPhone = "01002669119";
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
+
+            // نسخ المبلغ وحده للحافظة لسهولة لصقه داخل تطبيق انستاباي
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(instapayPhone).catch(() => {});
+                navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
             }
-            showToast("تم نسخ رقم التحويل (01002669119)، جاري فتح InstaPay...", "fa-copy");
+
+            showToast(`تم نسخ المبلغ (${grandTotal} ج.م)، جاري فتح InstaPay...`, "fa-copy");
+
             setTimeout(() => {
                 window.location.href = "instapay://transfer";
-            }, 600);
+            }, 800);
         }
 
         function showToast(message, icon = 'fa-circle-info') {
