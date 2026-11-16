@@ -19,7 +19,6 @@
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
-      // التحقق من الدومين لتجنب خطأ OneSignal Origin Restriction أثناء المعاينة
       const currentHost = window.location.hostname;
       const isAllowedOrigin = currentHost.includes('minaibrahem.github.io') || currentHost.includes('localhost') || currentHost.includes('127.0.0.1') || currentHost.includes('googusercontent.com') || currentHost.includes('scf.usercontent.goog');
 
@@ -38,7 +37,6 @@
         console.log("Slidedown error:", err);
       }
 
-      // ربط المستخدم تلقائياً برقم هاتفه المسجل محلياً فور الفتح لتفعيل الـ Popup الخارجي
       let savedUser = localStorage.getItem('miro_user');
       if (savedUser) {
         try {
@@ -47,7 +45,6 @@
             let cleanPhone = String(uData.phone).trim();
             await OneSignal.login(cleanPhone);
             OneSignal.User.addTag("user_phone", cleanPhone);
-            console.log("OneSignal auto-logged in with phone:", cleanPhone);
           }
         } catch(e) {}
       }
@@ -63,23 +60,17 @@
           }
       });
 
-      // تحسين معالجة النقر لضمان التوجيه الداخلي ضمن نطاق التطبيق المستقل
       OneSignal.Notifications.addEventListener('click', function(event) {
           try {
               event.preventDefault();
               const targetUrl = (event.notification && event.notification.launchURL) ? event.notification.launchURL : window.location.href;
               window.location.assign(targetUrl);
-          } catch(e) {
-              console.log("Notification click handler error:", e);
-          }
+          } catch(e) {}
       });
 
-    } catch (sdkErr) {
-      console.log("OneSignal init bypassed in preview environment:", sdkErr);
-    }
+    } catch (sdkErr) {}
   });
 
-  // استقبال رسائل الخلفية من الService Worker لتحديث الجرس فوراً
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
@@ -122,7 +113,6 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
         }
-        /* ◄ ضبط الهيدر العلوي بمسافة ثابتة ومنضبطة تحت شريط الحالة دون أي حركة غير مرغوبة */
         header.bg-amazon-navy {
             padding-top: 24px !important;
         }
@@ -274,6 +264,30 @@
                         <div class="flex justify-between"><span data-i18n="deliveryFee">رسوم التوصيل:</span><span id="deliveryFee" class="font-semibold text-gray-800">0 ج.م</span></div>
                         <div class="flex justify-between text-sm font-bold text-gray-900 pt-2 border-t"><span data-i18n="total">المبلغ الإجمالي:</span><span id="grandTotalPrice" class="text-emerald-700">0 ج.م</span></div>
                     </div>
+
+                    <!-- خيارات طريقة الدفع -->
+                    <div class="space-y-2 pt-2 border-t">
+                        <label class="text-xs font-bold text-gray-800 block">طريقة الدفع:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200 cursor-pointer bg-gray-50 hover:bg-gray-100 text-xs font-semibold">
+                                <input type="radio" name="paymentMethod" value="كاش" checked class="accent-emerald-600">
+                                <span>الدفع عند الاستلام (كاش)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl border border-purple-200 cursor-pointer bg-purple-50/50 hover:bg-purple-50 text-xs font-semibold text-purple-900">
+                                <input type="radio" name="paymentMethod" value="InstaPay" class="accent-purple-600">
+                                <span>تحويل InstaPay 💜</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- زر فتح انستاباي بالمبلغ المباشر -->
+                    <div id="instapayActionBox" class="hidden space-y-2 pt-1">
+                        <a id="btnOpenInstaPay" href="#" target="_blank" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-mobile-screen-button"></i> افتح تطبيق InstaPay للتحويل
+                        </a>
+                        <p class="text-[10px] text-gray-500 text-center">رقم التحويل المعتمد للمتجر: <strong class="text-purple-700" dir="ltr">01002669119</strong></p>
+                    </div>
+
                     <button onclick="submitOrder()" id="btnSubmitOrder" class="w-full bg-amazon-button text-gray-900 font-extrabold text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 mt-2">
                         <i class="fa-solid fa-check-circle text-base"></i> <span data-i18n="confirmOrder">تأكيد وإرسال الطلب</span>
                     </button>
@@ -401,6 +415,30 @@
     </div>
 
     <script>
+        const INSTAPAY_PHONE = "01002669119";
+
+        document.addEventListener('change', function(e) {
+            if (e.target.name === 'paymentMethod') {
+                const box = document.getElementById('instapayActionBox');
+                if (e.target.value === 'InstaPay') {
+                    box.classList.remove('hidden');
+                    updateInstaPayLink();
+                } else {
+                    box.classList.add('hidden');
+                }
+            }
+        });
+
+        function updateInstaPayLink() {
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
+            const btn = document.getElementById('btnOpenInstaPay');
+            if (btn) {
+                btn.href = `instapay://transfer?pn=MiroMarkEt&pa=${INSTAPAY_PHONE}@instapay&am=${grandTotal}&cu=EGP`;
+            }
+        }
+
         function showToast(message, icon = 'fa-circle-info') {
             const toast = document.getElementById('customToast');
             const toastMsg = document.getElementById('toastMessage');
@@ -418,7 +456,6 @@
 
         window.alert = function(message) { showToast(message, 'fa-bell'); };
 
-        // نظام مركز الإشعارات (الجرس)
         let appNotifications = JSON.parse(localStorage.getItem('miro_notifications')) || [
             { id: 1, title: "مرحباً بك في Miro MarkEt", body: "استمتع بأفضل الخضروات والفواكه الطازجة بأفضل الأسعار.", date: "اليوم", read: false }
         ];
@@ -919,6 +956,11 @@
             document.getElementById('subtotalPrice').textContent = `${subtotal} ${l.egp}`;
             document.getElementById('deliveryFee').textContent = `${delivery} ${l.egp}`;
             document.getElementById('grandTotalPrice').textContent = `${subtotal + delivery} ${l.egp}`;
+            
+            // تحديث رابط انستاباي تلقائياً إذا كان مختاراً
+            if(document.querySelector('input[name="paymentMethod"]:checked')?.value === 'InstaPay') {
+                updateInstaPayLink();
+            }
         }
 
         async function submitOrder() {
@@ -940,12 +982,23 @@
             const grandTotal = subtotal + delivery;
             const itemsSummary = state.cart.map(i => `${i.name} (${i.qty} ${i.unit || 'كجم'})`).join(', ');
 
-            // توليد معرف طلب فريد لمنع إرسال طلبات مكررة
+            // تحديد طريقة الدفع (كاش أو InstaPay)
+            const selectedPaymentEl = document.querySelector('input[name="paymentMethod"]:checked');
+            const paymentChoice = selectedPaymentEl ? selectedPaymentEl.value : 'كاش';
+            const paymentStatusText = paymentChoice === 'InstaPay' ? 'تم الدفع بـ InstaPay' : 'الدفع كاش عند الاستلام';
+
             const clientRequestId = 'REQ-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
 
             const payload = {
-                action: 'order', name: state.user.name, phone: state.user.phone, address: state.user.address,
-                items: itemsSummary, subtotal: subtotal, delivery: delivery, total: grandTotal, payment: "كاش",
+                action: 'order', 
+                name: state.user.name, 
+                phone: state.user.phone, 
+                address: state.user.address,
+                items: itemsSummary, 
+                subtotal: subtotal, 
+                delivery: delivery, 
+                total: grandTotal, 
+                payment: paymentStatusText, // إرسال طريقة الدفع لتسجيلها في الشيت
                 client_request_id: clientRequestId
             };
 
@@ -959,7 +1012,16 @@
             } catch (e) { console.log(e); }
 
             let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
-            localOrders.unshift({ id: newOrderId, total: grandTotal, items: itemsSummary, address: state.user.address, phone: state.user.phone, status: 'قيد الانتظار', date: currentTime });
+            localOrders.unshift({ 
+                id: newOrderId, 
+                total: grandTotal, 
+                items: itemsSummary, 
+                address: state.user.address, 
+                phone: state.user.phone, 
+                payment: paymentStatusText,
+                status: 'قيد الانتظار', 
+                date: currentTime 
+            });
             localStorage.setItem('miro_orders', JSON.stringify(localOrders));
 
             state.cart = [];
@@ -1031,8 +1093,7 @@
             if (event) event.preventDefault();
             const phoneInput = document.getElementById('authPhone').value.trim();
             let msgText = "مرحباً ميرو ماركت، نسيت كلمة المرور الخاصة بحسابي وأرغب في استرجاعها.";
-            if (phoneInput) msgText += `
-رقم الهاتف: ${phoneInput}`;
+            if (phoneInput) msgText += `\nرقم الهاتف: ${phoneInput}`;
             window.open(`https://wa.me/201002669119?text=${encodeURIComponent(msgText)}`, '_blank');
         }
 
@@ -1105,10 +1166,7 @@
                     });
                 } catch (e) { console.log(e); }
 
-                const waUrl = `https://wa.me/201002669119?text=${encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:
-الاسم: ${name}
-البريد الإلكتروني: ${email}
-رقم الجوال: ${phone}`)}`;
+                const waUrl = `https://wa.me/201002669119?text=${encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:\nالاسم: ${name}\nالبريد الإلكتروني: ${email}\nرقم الجوال: ${phone}`)}`;
                 document.getElementById('btnSendWhatsappMsg').href = waUrl;
                 document.getElementById('authFieldsStep1').classList.add('hidden');
                 document.getElementById('authFieldsStep2').classList.remove('hidden');
