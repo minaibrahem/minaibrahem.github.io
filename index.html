@@ -282,7 +282,7 @@
 
                     <!-- زر فتح انستاباي بالمبلغ المباشر -->
                     <div id="instapayActionBox" class="hidden space-y-2 pt-1">
-                        <a id="btnOpenInstaPay" href="#" target="_blank" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                        <a id="btnOpenInstaPay" href="#" onclick="openInstaPaySafely(event)" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
                             <i class="fa-solid fa-mobile-screen-button"></i> افتح تطبيق InstaPay للتحويل
                         </a>
                         <p class="text-[10px] text-gray-500 text-center">رقم التحويل المعتمد للمتجر: <strong class="text-purple-700" dir="ltr">01002669119</strong></p>
@@ -430,13 +430,22 @@
         });
 
         function updateInstaPayLink() {
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            const delivery = state.settings.deliveryFee || 11;
-            const grandTotal = subtotal + delivery;
             const btn = document.getElementById('btnOpenInstaPay');
             if (btn) {
-                btn.href = `instapay://transfer?pn=MiroMarkEt&pa=${INSTAPAY_PHONE}@instapay&am=${grandTotal}&cu=EGP`;
+                btn.href = `instapay://transfer`;
             }
+        }
+
+        function openInstaPaySafely(event) {
+            if (event) event.preventDefault();
+            const instapayPhone = "01002669119";
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(instapayPhone).catch(() => {});
+            }
+            showToast("تم نسخ رقم التحويل (01002669119)، جاري فتح InstaPay...", "fa-copy");
+            setTimeout(() => {
+                window.location.href = "instapay://transfer";
+            }, 600);
         }
 
         function showToast(message, icon = 'fa-circle-info') {
@@ -956,11 +965,6 @@
             document.getElementById('subtotalPrice').textContent = `${subtotal} ${l.egp}`;
             document.getElementById('deliveryFee').textContent = `${delivery} ${l.egp}`;
             document.getElementById('grandTotalPrice').textContent = `${subtotal + delivery} ${l.egp}`;
-            
-            // تحديث رابط انستاباي تلقائياً إذا كان مختاراً
-            if(document.querySelector('input[name="paymentMethod"]:checked')?.value === 'InstaPay') {
-                updateInstaPayLink();
-            }
         }
 
         async function submitOrder() {
@@ -982,7 +986,6 @@
             const grandTotal = subtotal + delivery;
             const itemsSummary = state.cart.map(i => `${i.name} (${i.qty} ${i.unit || 'كجم'})`).join(', ');
 
-            // تحديد طريقة الدفع (كاش أو InstaPay)
             const selectedPaymentEl = document.querySelector('input[name="paymentMethod"]:checked');
             const paymentChoice = selectedPaymentEl ? selectedPaymentEl.value : 'كاش';
             const paymentStatusText = paymentChoice === 'InstaPay' ? 'تم الدفع بـ InstaPay' : 'الدفع كاش عند الاستلام';
@@ -998,7 +1001,7 @@
                 subtotal: subtotal, 
                 delivery: delivery, 
                 total: grandTotal, 
-                payment: paymentStatusText, // إرسال طريقة الدفع لتسجيلها في الشيت
+                payment: paymentStatusText,
                 client_request_id: clientRequestId
             };
 
