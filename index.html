@@ -121,7 +121,10 @@
             font-family: 'Cairo', sans-serif;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
-            padding-top: 30px; /* ◄ مساحة ثابتة ومضمونة تمنع التداخل مع شريط الحالة العلوي تماماً */
+        }
+        /* ◄ جعل الهيدر العلوي يبعد مسافة صغيرة ومنضبطة تحت شريط الحالة وثابت في مكانه */
+        header.bg-amazon-navy {
+            padding-top: max(env(safe-area-inset-top), 20px) !important;
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
