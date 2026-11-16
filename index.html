@@ -126,10 +126,11 @@
 </head>
 <body class="bg-gray-100 text-gray-900 pb-20 select-none">
 
+    <!-- نافذة التنبيه الواضحة (Toast) -->
     <div id="customToast" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
-        <div class="bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-gray-700 min-w-[280px]">
-            <i id="toastIcon" class="fa-solid fa-circle-info text-amazon-yellow text-lg"></i>
-            <span id="toastMessage" class="text-xs font-bold font-cairo"></span>
+        <div class="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-amazon-yellow min-w-[300px]">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-amazon-yellow text-xl"></i>
+            <span id="toastMessage" class="text-xs font-bold font-cairo leading-relaxed"></span>
         </div>
     </div>
 
@@ -429,45 +430,49 @@
         });
 
         function openInstaPaySmart(event) {
-    if (event) event.preventDefault();
-    
-    // حساب الإجمالي الحالي من السلة + رسوم التوصيل
-    const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    const delivery = state.settings.deliveryFee || 11;
-    const grandTotal = subtotal + delivery;
+            if (event) event.preventDefault();
+            
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
 
-    // دمج المبلغ الإجمالي تلقائياً في رابط إنستاباي الخاص بك
-    const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
+            // نسخ الرقم أو المبلغ بوضوح تام للحافظة (Clipboard)
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
+            }
 
-    // نسخ المبلغ احتياطياً أيضاً للحافظة لضمان تجربة سلسة
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
-    }
+            // إظهار رسالة واضحة جداً وتظل ظاهرة لمدة 3 ثوانٍ (3000ms)
+            showToast(`تم نسخ المبلغ (${grandTotal} ج.م) بنجاح! الصقه في إنستاباي.`, "fa-circle-check", 3000);
 
-    showToast(`تم تحديث مبلغ التحويل (${grandTotal} ج.م)، جاري فتح InstaPay...`, "fa-wallet");
+            // تأخير فتح رابط إنستاباي لمدة 3 ثوانٍ ليتسنى للعميل قراءة الرسالة بوضوح
+            setTimeout(() => {
+                const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
+                window.location.href = instapayLink;
+            }, 3000);
+        }
 
-    setTimeout(() => {
-        // فتح الرابط المباشر بالمبلغ
-        window.location.href = instapayLink;
-    }, 800);
-}
-
-        function showToast(message, icon = 'fa-circle-info') {
+        // تحديث دالة الـ Toast لدعم تحديد مدة الظهور (بالمللي ثانية)
+        function showToast(message, icon = 'fa-circle-info', duration = 3500) {
             const toast = document.getElementById('customToast');
             const toastMsg = document.getElementById('toastMessage');
             const toastIcon = document.getElementById('toastIcon');
             if (!toast || !toastMsg) return;
+            
             toastMsg.textContent = message;
-            toastIcon.className = `fa-solid ${icon} text-amazon-yellow text-lg`;
+            toastIcon.className = `fa-solid ${icon} text-amazon-yellow text-xl`;
+            
+            // إظهار التنبيه بحركة سلسة
             toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
             toast.classList.add('opacity-100', 'translate-y-0');
+            
+            // إخفاء التنبيه بعد انقضاء المدة المحددة (3 ثواني)
             setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
-            }, 3500);
+            }, duration);
         }
 
-        window.alert = function(message) { showToast(message, 'fa-bell'); };
+        window.alert = function(message) { showToast(message, 'fa-bell', 3000); };
 
         let appNotifications = JSON.parse(localStorage.getItem('miro_notifications')) || [
             { id: 1, title: "مرحباً بك في Miro MarkEt", body: "استمتع بأفضل الخضروات والفواكه الطازجة بأفضل الأسعار.", date: "اليوم", read: false }
@@ -1091,7 +1096,7 @@
             } else {
                 tabUp.className = "w-1/2 pb-2 border-b-2 border-amazon-orange text-amazon-navy";
                 tabIn.className = "w-1/2 pb-2 text-gray-400 border-b-2 border-transparent";
-                signupFields.classList.remove('hidden');
+                signupFields.classList.add('hidden');
                 forgotPassBtn.classList.add('hidden');
             }
         }
