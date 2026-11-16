@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     
+    <!-- إضافة مكتبة Tesseract.js لقراءة النصوص من صور الإيصالات (OCR) -->
+    <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
+
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -131,6 +134,28 @@
         <div class="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-amazon-yellow min-w-[300px]">
             <i id="toastIcon" class="fa-solid fa-circle-check text-amazon-yellow text-xl"></i>
             <span id="toastMessage" class="text-xs font-bold font-cairo leading-relaxed"></span>
+        </div>
+    </div>
+
+    <!-- نافذة رفع وفحص إيصال التحويل بالذكاء الاصطناعي -->
+    <div id="uploadReceiptModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl text-center relative">
+            <button onclick="closeUploadModal()" class="absolute top-3 left-3 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            
+            <div class="w-12 h-12 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-receipt"></i>
+            </div>
+            
+            <h3 class="font-bold text-sm text-gray-800">فحص وتأكيد إيصال إنستاباي</h3>
+            <p id="ocrStatusText" class="text-xs text-gray-600 leading-relaxed">يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.</p>
+            
+            <div class="space-y-3 pt-2">
+                <input type="file" id="receiptFileInput" accept="image/*" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                
+                <button id="btnVerifyReceipt" onclick="processReceiptImage()" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> فحص الإيصال وتأكيد الطلب
+                </button>
+            </div>
         </div>
     </div>
 
@@ -281,10 +306,10 @@
                         </div>
                     </div>
 
-                    <!-- زر فتح انستاباي الذكي مع نسخ الرقم والمبلغ تلقائياً -->
+                    <!-- زر فتح انستاباي الذكي مع نسخ المبلغ -->
                     <div id="instapayActionBox" class="hidden space-y-2 pt-1">
                         <button type="button" onclick="openInstaPaySmart(event)" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-mobile-screen-button"></i> انسخ الرقم والمبلغ وافتح InstaPay
+                            <i class="fa-solid fa-mobile-screen-button"></i> انسخ المبلغ وافتح InstaPay
                         </button>
                         <p class="text-[10px] text-gray-500 text-center">رقم التحويل للمتجر: <strong class="text-purple-700" dir="ltr">01002669119</strong></p>
                     </div>
@@ -436,22 +461,86 @@
             const delivery = state.settings.deliveryFee || 11;
             const grandTotal = subtotal + delivery;
 
-            // نسخ الرقم أو المبلغ بوضوح تام للحافظة (Clipboard)
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
             }
 
-            // إظهار رسالة واضحة جداً وتظل ظاهرة لمدة 3 ثوانٍ (3000ms)
-            showToast(`تم نسخ المبلغ (${grandTotal} ج.م) بنجاح! الصقه في إنستاباي.`, "fa-circle-check", 3000);
+            showToast(`تم نسخ المبلغ (${grandTotal} ج.م) للحافظة، جاري فتح InstaPay...`, "fa-circle-check", 3000);
 
-            // تأخير فتح رابط إنستاباي لمدة 3 ثوانٍ ليتسنى للعميل قراءة الرسالة بوضوح
             setTimeout(() => {
                 const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
                 window.location.href = instapayLink;
+                
+                // إظهار نافذة رفع الإيصال بعد عودة العميل للتطبيق بـ 2 ثانية
+                setTimeout(() => {
+                    document.getElementById('uploadReceiptModal').classList.remove('hidden');
+                }, 2000);
             }, 3000);
         }
 
-        // تحديث دالة الـ Toast لدعم تحديد مدة الظهور (بالمللي ثانية)
+        function closeUploadModal() {
+            document.getElementById('uploadReceiptModal').classList.add('hidden');
+        }
+
+        // دالة الفحص الذكي للـ Screenshot واستخراج المبلغ ومقارنته بالطلب
+        async function processReceiptImage() {
+            const fileInput = document.getElementById('receiptFileInput');
+            const statusText = document.getElementById('ocrStatusText');
+            const verifyBtn = document.getElementById('btnVerifyReceipt');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast("يرجى اختيار صورة الإيصال أولاً!", "fa-triangle-exclamation", 3000);
+                return;
+            }
+
+            const file = fileInput.files[0];
+            verifyBtn.disabled = true;
+            statusText.textContent = "جاري قراءة وفحص الإيصال بالذكاء الاصطناعي، يرجى الانتظار...";
+
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const expectedTotal = subtotal + delivery;
+
+            try {
+                // استخدام Tesseract لقراءة النصوص العربية والإنجليزية من الصورة
+                const { data: { text } } = await Tesseract.recognize(file, 'ara+eng');
+                
+                // تنظيف النصوص والبحث عن أرقام مطابقة للمبلغ الإجمالي أو قريبة منه
+                const cleanText = text.replace(/\s+/g, '');
+                console.log("OCR Extracted Text:", cleanText);
+
+                // التحقق ما إذا كان المبلغ الإجمالي موجوداً في النصوص المستخرجة
+                const foundAmount = cleanText.includes(String(expectedTotal)) || cleanText.includes(String(expectedTotal) + '.00');
+
+                if (foundAmount) {
+                    statusText.textContent = "✅ تم التحقق من الإيصال والمبلغ بنجاح!";
+                    showToast("تم التحقق من الدفع بنجاح!", "fa-circle-check", 3000);
+                    
+                    setTimeout(() => {
+                        closeUploadModal();
+                        submitOrder("تم الدفع بنجاح عبر InstaPay (مؤكد بالذكاء الاصطناعي)");
+                    }, 1500);
+                } else {
+                    statusText.textContent = "⚠️ لم نتمكن من مطابقة المبلغ تلقائياً. سيتم إرسال الطلب للمراجعة اليدوية.";
+                    showToast("لم يتم مطابقة المبلغ تلقائياً، جاري إرسال الطلب للمراجعة", "fa-triangle-exclamation", 4000);
+                    
+                    setTimeout(() => {
+                        closeUploadModal();
+                        submitOrder("تم الدفع بـ InstaPay (قيد المراجعة اليدوية للإيصال)");
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error("OCR Error:", err);
+                statusText.textContent = "حدث خطأ أثناء قراءة الصورة، سيتم إرسال الطلب للمراجعة.";
+                setTimeout(() => {
+                    closeUploadModal();
+                    submitOrder("تم الدفع بـ InstaPay (يتطلب فحص الإيصال)");
+                }, 2000);
+            } finally {
+                verifyBtn.disabled = false;
+            }
+        }
+
         function showToast(message, icon = 'fa-circle-info', duration = 3500) {
             const toast = document.getElementById('customToast');
             const toastMsg = document.getElementById('toastMessage');
@@ -461,11 +550,9 @@
             toastMsg.textContent = message;
             toastIcon.className = `fa-solid ${icon} text-amazon-yellow text-xl`;
             
-            // إظهار التنبيه بحركة سلسة
             toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
             toast.classList.add('opacity-100', 'translate-y-0');
             
-            // إخفاء التنبيه بعد انقضاء المدة المحددة (3 ثواني)
             setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
@@ -814,7 +901,7 @@
             container.innerHTML = localOrders.map(order => {
                 const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
                 const isCancelled = statusText.includes('تم الالغاء') || statusText.includes('تم الإلغاء') || statusText.includes('ملغي') || statusText.includes('Cancelled');
-                const isApproved = !isCancelled && (statusText.includes('تم') || statusText.includes('موافقة') || statusText.includes('مقبول'));
+                const isApproved = !isCancelled && (statusText.includes('تم') || statusText.includes('موافقة') || statusText.includes('مقبول') || statusText.includes('مؤكد'));
                 const isCancelRequested = !isCancelled && statusText.includes('إلغاء');
 
                 let statusBadgeClass = 'bg-yellow-100 text-yellow-800';
@@ -976,7 +1063,7 @@
             document.getElementById('grandTotalPrice').textContent = `${subtotal + delivery} ${l.egp}`;
         }
 
-        async function submitOrder() {
+        async function submitOrder(customPaymentStatus = null) {
             if (!state.user) {
                 showToast(state.lang === 'ar' ? "يرجى تسجيل الدخول أولاً لتأكيد الطلب!" : "Please sign in first!", "fa-user-lock");
                 openLoginModal('signin');
@@ -997,7 +1084,7 @@
 
             const selectedPaymentEl = document.querySelector('input[name="paymentMethod"]:checked');
             const paymentChoice = selectedPaymentEl ? selectedPaymentEl.value : 'كاش';
-            const paymentStatusText = paymentChoice === 'InstaPay' ? 'تم الدفع بـ InstaPay' : 'الدفع كاش عند الاستلام';
+            const paymentStatusText = customPaymentStatus ? customPaymentStatus : (paymentChoice === 'InstaPay' ? 'تم الدفع بـ InstaPay' : 'الدفع كاش عند الاستلام');
 
             const clientRequestId = 'REQ-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
 
