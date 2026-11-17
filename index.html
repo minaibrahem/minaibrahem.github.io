@@ -458,45 +458,43 @@
         });
 
         function openInstaPaySmart(event) {
-    if (event) event.preventDefault();
-    
-    // تفريغ حقل الملف ونص الحالة قبل فتح نافذة الرفع الجديدة
-    const fileInput = document.getElementById('receiptFileInput');
-    const statusText = document.getElementById('ocrStatusText');
-    if (fileInput) fileInput.value = "";
-    if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
+            if (event) event.preventDefault();
+            
+            // تفريغ حقل الملف ونص الحالة قبل فتح نافذة الرفع الجديدة
+            const fileInput = document.getElementById('receiptFileInput');
+            const statusText = document.getElementById('ocrStatusText');
+            if (fileInput) fileInput.value = "";
+            if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
 
-    const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    const delivery = state.settings.deliveryFee || 11;
-    const grandTotal = subtotal + delivery;
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const delivery = state.settings.deliveryFee || 11;
+            const grandTotal = subtotal + delivery;
 
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
-    }
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
+            }
 
-    showToast(`تم نسخ المبلغ (${grandTotal} ج.م) للحافظة، جاري فتح InstaPay...`, "fa-circle-check", 2000);
+            showToast(`تم نسخ المبلغ (${grandTotal} ج.م) للحافظة، جاري فتح InstaPay...`, "fa-circle-check", 2000);
 
-    setTimeout(() => {
-        const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
-        window.location.href = instapayLink;
-        
-        setTimeout(() => {
-            document.getElementById('uploadReceiptModal').classList.remove('hidden');
-        }, 1500);
-    }, 2000);
-}
-
-
+            setTimeout(() => {
+                const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
+                window.location.href = instapayLink;
+                
+                setTimeout(() => {
+                    document.getElementById('uploadReceiptModal').classList.remove('hidden');
+                }, 1500);
+            }, 2000);
+        }
 
         function closeUploadModal() {
-    const modal = document.getElementById('uploadReceiptModal');
-    const fileInput = document.getElementById('receiptFileInput');
-    const statusText = document.getElementById('ocrStatusText');
-    
-    if (modal) modal.classList.add('hidden');
-    if (fileInput) fileInput.value = ""; // تفريغ حقل اختيار الملف تماماً
-    if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
-}
+            const modal = document.getElementById('uploadReceiptModal');
+            const fileInput = document.getElementById('receiptFileInput');
+            const statusText = document.getElementById('ocrStatusText');
+            
+            if (modal) modal.classList.add('hidden');
+            if (fileInput) fileInput.value = ""; // تفريغ حقل اختيار الملف تماماً
+            if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
+        }
 
         // دالة الفحص الذكي للـ Screenshot واستخراج المبلغ ومقارنته بالطلب
         async function processReceiptImage() {
@@ -709,6 +707,11 @@
             renderNotificationsUI();
             fetchDataFromSheets();
 
+            // صمام أمان زمني لإخفاء شاشة التحميل خلال 3 ثوانٍ كحد أقصى لمنع التوقف
+            setTimeout(() => {
+                hideLoadingScreen();
+            }, 3000);
+
             // التحقق من طريقة الدفع الافتراضية عند تحميل الصفحة لإخفاء زر التأكيد إن كان InstaPay مختاراً
             const selectedPayment = document.querySelector('input[name="paymentMethod"]:checked');
             const submitBtn = document.getElementById('btnSubmitOrder');
@@ -837,7 +840,7 @@
                             if (foundInSheet && foundInSheet.status !== local.status) {
                                 addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
                             }
-                            return foundInSheet ? { ...local, status: foundInSheet.status, date: foundInSheet.date || local.date } : local;
+                            return foundInSheet ? { ...local, status: foundInSheet.status, payment: foundInSheet.payment || local.payment, date: foundInSheet.date || local.date } : local;
                         });
                         
                         if (state.user && state.user.phone) {
@@ -914,22 +917,72 @@
             });
         }
 
-       function updateOrdersHistoryUI() {
+        function parseArabicOrEnglishDate(dateStr) {
+    if (!dateStr) return 0;
+    if (typeof dateStr === 'number') return dateStr;
+
+    // 1. تحويل الأرقام العربية/الهندية (٠-٩) إلى إنجليزية (0-9)
+    const str = String(dateStr).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+
+    // 2. استخراج مكونات التاريخ (يوم/شهر/سنة) والوقت (ساعة:دقيقة:ثانية)
+    const dateMatch = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    const timeMatch = str.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+
+    if (dateMatch) {
+        let p1 = parseInt(dateMatch[1], 10);
+        let p2 = parseInt(dateMatch[2], 10);
+        let year = parseInt(dateMatch[3], 10);
+        if (year < 100) year += 2000;
+
+        // تحديد اليوم والشهر (في ar-EG يكون الأول هو اليوم والثاني هو الشهر غالباً، إلا إذا كان الثاني > 12)
+        let day = p1;
+        let month = p2 - 1;
+        if (p2 > 12) {
+            month = p1 - 1;
+            day = p2;
+        }
+
+        let hours = 0, minutes = 0, seconds = 0;
+        if (timeMatch) {
+            hours = parseInt(timeMatch[1], 10);
+            minutes = parseInt(timeMatch[2], 10);
+            seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+
+            const isPM = str.includes('م') || str.toLowerCase().includes('pm');
+            const isAM = str.includes('ص') || str.toLowerCase().includes('am');
+
+            if (isPM && hours < 12) hours += 12;
+            if (isAM && hours === 12) hours = 0;
+        }
+
+        const timestamp = new Date(year, month, day, hours, minutes, seconds).getTime();
+        if (!isNaN(timestamp)) return timestamp;
+    }
+
+    const fallback = new Date(str).getTime();
+    return isNaN(fallback) ? 0 : fallback;
+}
+
+function updateOrdersHistoryUI() {
     const container = document.getElementById('ordersHistoryContainer');
     if (!container) return;
-    let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
     
-    // 💡 الترتيب الزمني الصحيح: الأحدث في الأعلى دائماً بناءً على تاريخ وحفظ الطلب
+    let localOrders = [];
+    try {
+        localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+    } catch (e) {
+        localOrders = [];
+    }
+    
+    // الترتيب الزمني الحقيقي من الأحدث للأقدم
     localOrders.sort((a, b) => {
-        // محاولة استخراج الأرقام الزمنية أو مقارنة النصوص التاريخية والمُعّرفات العكسية
-        let timeA = a.date ? new Date(a.date).getTime() : 0;
-        let timeB = b.date ? new Date(b.date).getTime() : 0;
+        const timeA = parseArabicOrEnglishDate(a.date);
+        const timeB = parseArabicOrEnglishDate(b.date);
         
-        if (timeA === time5 => timeA === timeB) {
-            // كبديل إضافي: الاعتماد على رقم الـ ID تنازلياً لو تساوى الوقت
-            return String(b.id).localeCompare(String(a.id));
+        if (timeB !== timeA) {
+            return timeB - timeA;
         }
-        return timeB - timeA; // من الأحدث إلى الأقدم
+        return 0;
     });
 
     const l = i18n[state.lang];
@@ -937,8 +990,6 @@
         container.innerHTML = `<p class="text-gray-400 text-center py-2">${l.noOrders}</p>`;
         return;
     }
-    
-    // ... باقي كود العرض كما هو ...
 
     container.innerHTML = localOrders.map(order => {
         const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
@@ -951,7 +1002,6 @@
         else if (isApproved) statusBadgeClass = 'bg-green-100 text-green-700';
         else if (isCancelRequested) statusBadgeClass = 'bg-orange-100 text-orange-800';
 
-        // تنسيق عرض حالة وطريقة الدفع
         const paymentText = order.payment ? String(order.payment).trim() : 'الدفع كاش عند الاستلام';
         const isInstaPay = paymentText.toLowerCase().includes('instapay');
         const isAiVerified = paymentText.includes('مؤكد');
@@ -981,7 +1031,6 @@
             
             <p class="text-gray-600 truncate">${l.itemsLabel} ${order.items}</p>
 
-            <!-- سطر حالة الدفع -->
             <div class="flex items-center gap-1.5 text-[10px] font-bold">
                 <span class="text-gray-500">${state.lang === 'ar' ? 'حالة الدفع:' : 'Payment:'}</span>
                 <span class="px-2 py-0.5 rounded-md inline-flex items-center gap-1 ${paymentBadgeClass}">
