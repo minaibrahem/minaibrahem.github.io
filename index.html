@@ -914,48 +914,70 @@
             });
         }
 
-        function updateOrdersHistoryUI() {
-            const container = document.getElementById('ordersHistoryContainer');
-            if (!container) return;
-            let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
-            const l = i18n[state.lang];
-            if (localOrders.length === 0) {
-                container.innerHTML = `<p class="text-gray-400 text-center py-2">${l.noOrders}</p>`;
-                return;
-            }
-            container.innerHTML = localOrders.map(order => {
-                const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
-                const isCancelled = statusText.includes('تم الالغاء') || statusText.includes('تم الإلغاء') || statusText.includes('ملغي') || statusText.includes('Cancelled');
-                const isApproved = !isCancelled && (statusText.includes('تم') || statusText.includes('موافقة') || statusText.includes('مقبول') || statusText.includes('مؤكد'));
-                const isCancelRequested = !isCancelled && statusText.includes('إلغاء');
+       function updateOrdersHistoryUI() {
+    const container = document.getElementById('ordersHistoryContainer');
+    if (!container) return;
+    let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+    const l = i18n[state.lang];
+    if (localOrders.length === 0) {
+        container.innerHTML = `<p class="text-gray-400 text-center py-2">${l.noOrders}</p>`;
+        return;
+    }
+    container.innerHTML = localOrders.map(order => {
+        const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
+        const isCancelled = statusText.includes('تم الالغاء') || statusText.includes('تم الإلغاء') || statusText.includes('ملغي') || statusText.includes('Cancelled');
+        const isApproved = !isCancelled && (statusText.includes('تم') || statusText.includes('موافقة') || statusText.includes('مقبول') || statusText.includes('مؤكد'));
+        const isCancelRequested = !isCancelled && statusText.includes('إلغاء');
 
-                let statusBadgeClass = 'bg-yellow-100 text-yellow-800';
-                if (isCancelled) statusBadgeClass = 'bg-red-100 text-red-700 border border-red-200';
-                else if (isApproved) statusBadgeClass = 'bg-green-100 text-green-700';
-                else if (isCancelRequested) statusBadgeClass = 'bg-orange-100 text-orange-800';
+        let statusBadgeClass = 'bg-yellow-100 text-yellow-800';
+        if (isCancelled) statusBadgeClass = 'bg-red-100 text-red-700 border border-red-200';
+        else if (isApproved) statusBadgeClass = 'bg-green-100 text-green-700';
+        else if (isCancelRequested) statusBadgeClass = 'bg-orange-100 text-orange-800';
 
-                let actionButtonHtml = '';
-                if (isCancelled || isApproved) {
-                    actionButtonHtml = `<span class="text-gray-400 text-xs"><i class="fa-solid fa-lock ${isCancelled ? 'text-red-500' : 'text-emerald-600'}"></i></span>`;
-                } else if (isCancelRequested) {
-                    actionButtonHtml = `<div class="flex items-center gap-1.5"><span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded border border-orange-200">${state.lang === 'ar' ? 'قيد الإلغاء' : 'Cancelling'}</span><button onclick="requestOrderUncancel('${order.id}')" class="text-emerald-700 font-bold text-[10px] px-2 py-0.5 rounded border border-emerald-500 bg-emerald-50 hover:bg-emerald-100 transition"><i class="fa-solid fa-rotate-left"></i> ${state.lang === 'ar' ? 'تراجع' : 'Revert'}</button></div>`;
-                } else {
-                    actionButtonHtml = `<button onclick="requestOrderCancellation('${order.id}')" class="text-amber-800 font-bold text-[11px] px-2.5 py-0.5 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 transition">${state.lang === 'ar' ? 'طلب إلغاء' : 'Cancel'}</button>`;
-                }
-
-                return `
-                <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 space-y-1 relative">
-                    <div class="flex justify-between items-center font-bold text-gray-800">
-                        <span class="text-emerald-700">${state.lang === 'ar' ? 'الإجمالي:' : 'Total:'} ${order.total} ${l.egp}</span>
-                        <div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded font-bold ${statusBadgeClass}">${statusText}</span>${actionButtonHtml}</div>
-                    </div>
-                    <p class="text-gray-600 truncate">${l.itemsLabel} ${order.items}</p>
-                    <div class="flex justify-between items-center text-[10px] text-gray-500 font-semibold pt-1 border-t border-gray-200">
-                        <span>${l.orderIdLabel} <strong class="text-amazon-navy">${order.id}</strong></span><span>${order.date || ''}</span>
-                    </div>
-                </div>`;
-            }).join('');
+        // تنسيق عرض حالة وطريقة الدفع
+        const paymentText = order.payment ? String(order.payment).trim() : 'الدفع كاش عند الاستلام';
+        const isInstaPay = paymentText.toLowerCase().includes('instapay');
+        const isAiVerified = paymentText.includes('مؤكد');
+        
+        let paymentBadgeClass = 'bg-gray-200 text-gray-700';
+        let paymentIcon = 'fa-money-bill-wave';
+        if (isInstaPay) {
+            paymentBadgeClass = isAiVerified ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-amber-50 text-amber-800 border border-amber-200';
+            paymentIcon = 'fa-mobile-screen-button';
         }
+
+        let actionButtonHtml = '';
+        if (isCancelled || isApproved) {
+            actionButtonHtml = `<span class="text-gray-400 text-xs"><i class="fa-solid fa-lock ${isCancelled ? 'text-red-500' : 'text-emerald-600'}"></i></span>`;
+        } else if (isCancelRequested) {
+            actionButtonHtml = `<div class="flex items-center gap-1.5"><span class="text-[10px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded border border-orange-200">${state.lang === 'ar' ? 'قيد الإلغاء' : 'Cancelling'}</span><button onclick="requestOrderUncancel('${order.id}')" class="text-emerald-700 font-bold text-[10px] px-2 py-0.5 rounded border border-emerald-500 bg-emerald-50 hover:bg-emerald-100 transition"><i class="fa-solid fa-rotate-left"></i> ${state.lang === 'ar' ? 'تراجع' : 'Revert'}</button></div>`;
+        } else {
+            actionButtonHtml = `<button onclick="requestOrderCancellation('${order.id}')" class="text-amber-800 font-bold text-[11px] px-2.5 py-0.5 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 transition">${state.lang === 'ar' ? 'طلب إلغاء' : 'Cancel'}</button>`;
+        }
+
+        return `
+        <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 space-y-1.5 relative">
+            <div class="flex justify-between items-center font-bold text-gray-800">
+                <span class="text-emerald-700">${state.lang === 'ar' ? 'الإجمالي:' : 'Total:'} ${order.total} ${l.egp}</span>
+                <div class="flex items-center gap-2"><span class="text-[10px] px-2 py-0.5 rounded font-bold ${statusBadgeClass}">${statusText}</span>${actionButtonHtml}</div>
+            </div>
+            
+            <p class="text-gray-600 truncate">${l.itemsLabel} ${order.items}</p>
+
+            <!-- سطر حالة الدفع -->
+            <div class="flex items-center gap-1.5 text-[10px] font-bold">
+                <span class="text-gray-500">${state.lang === 'ar' ? 'حالة الدفع:' : 'Payment:'}</span>
+                <span class="px-2 py-0.5 rounded-md inline-flex items-center gap-1 ${paymentBadgeClass}">
+                    <i class="fa-solid ${paymentIcon}"></i> ${paymentText}
+                </span>
+            </div>
+
+            <div class="flex justify-between items-center text-[10px] text-gray-500 font-semibold pt-1 border-t border-gray-200">
+                <span>${l.orderIdLabel} <strong class="text-amazon-navy">${order.id}</strong></span><span>${order.date || ''}</span>
+            </div>
+        </div>`;
+    }).join('');
+}
 
         function renderProducts(list) {
             const grid = document.getElementById('productsGrid');
