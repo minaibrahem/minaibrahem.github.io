@@ -918,11 +918,21 @@
     const container = document.getElementById('ordersHistoryContainer');
     if (!container) return;
     let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
+    
+    // 💡 ترتيب الطلبات ليكون الأحدث (الجديد) في الأعلى دائماً
+    localOrders.sort((a, b) => {
+        // الفرز برقم الطلب (ORD-XXXXXX) تنازلياً أو حسب تاريخ الإنشاء
+        return String(b.id).localeCompare(String(a.id));
+    });
+
     const l = i18n[state.lang];
     if (localOrders.length === 0) {
         container.innerHTML = `<p class="text-gray-400 text-center py-2">${l.noOrders}</p>`;
         return;
     }
+    
+    // ... باقي كود العرض كما هو ...
+
     container.innerHTML = localOrders.map(order => {
         const statusText = order.status ? String(order.status).trim() : 'قيد الانتظار';
         const isCancelled = statusText.includes('تم الالغاء') || statusText.includes('تم الإلغاء') || statusText.includes('ملغي') || statusText.includes('Cancelled');
