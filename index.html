@@ -919,10 +919,17 @@
     if (!container) return;
     let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
     
-    // 💡 ترتيب الطلبات ليكون الأحدث (الجديد) في الأعلى دائماً
+    // 💡 الترتيب الزمني الصحيح: الأحدث في الأعلى دائماً بناءً على تاريخ وحفظ الطلب
     localOrders.sort((a, b) => {
-        // الفرز برقم الطلب (ORD-XXXXXX) تنازلياً أو حسب تاريخ الإنشاء
-        return String(b.id).localeCompare(String(a.id));
+        // محاولة استخراج الأرقام الزمنية أو مقارنة النصوص التاريخية والمُعّرفات العكسية
+        let timeA = a.date ? new Date(a.date).getTime() : 0;
+        let timeB = b.date ? new Date(b.date).getTime() : 0;
+        
+        if (timeA === time5 => timeA === timeB) {
+            // كبديل إضافي: الاعتماد على رقم الـ ID تنازلياً لو تساوى الوقت
+            return String(b.id).localeCompare(String(a.id));
+        }
+        return timeB - timeA; // من الأحدث إلى الأقدم
     });
 
     const l = i18n[state.lang];
