@@ -458,36 +458,45 @@
         });
 
         function openInstaPaySmart(event) {
-            if (event) event.preventDefault();
-            
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-            const delivery = state.settings.deliveryFee || 11;
-            const grandTotal = subtotal + delivery;
+    if (event) event.preventDefault();
+    
+    // تفريغ حقل الملف ونص الحالة قبل فتح نافذة الرفع الجديدة
+    const fileInput = document.getElementById('receiptFileInput');
+    const statusText = document.getElementById('ocrStatusText');
+    if (fileInput) fileInput.value = "";
+    if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
 
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
-            }
+    const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const delivery = state.settings.deliveryFee || 11;
+    const grandTotal = subtotal + delivery;
 
-            // تعديل الرسالة لتظهر لمدة ثانيتين فقط
-            showToast(`تم نسخ المبلغ (${grandTotal} ج.م) للحافظة، جاري فتح InstaPay...`, "fa-circle-check", 2000);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(String(grandTotal)).catch(() => {});
+    }
 
-            // فتح رابط إنستاباي بعد ثانيتين (2000ms)
-            setTimeout(() => {
-                const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
-                window.location.href = instapayLink;
-                
-                // إظهار نافذة رفع الإيصال بعد الانتقال بـ 1.5 ثانية
-                setTimeout(() => {
-                    document.getElementById('uploadReceiptModal').classList.remove('hidden');
-                }, 1500);
-            }, 2000);
-        }
+    showToast(`تم نسخ المبلغ (${grandTotal} ج.م) للحافظة، جاري فتح InstaPay...`, "fa-circle-check", 2000);
+
+    setTimeout(() => {
+        const instapayLink = `https://ipn.eg/S/minaibrahimtamer86/instapay/2xiyRD?am=${grandTotal}`;
+        window.location.href = instapayLink;
+        
+        setTimeout(() => {
+            document.getElementById('uploadReceiptModal').classList.remove('hidden');
+        }, 1500);
+    }, 2000);
+}
 
 
 
         function closeUploadModal() {
-            document.getElementById('uploadReceiptModal').classList.add('hidden');
-        }
+    const modal = document.getElementById('uploadReceiptModal');
+    const fileInput = document.getElementById('receiptFileInput');
+    const statusText = document.getElementById('ocrStatusText');
+    
+    if (modal) modal.classList.add('hidden');
+    if (fileInput) fileInput.value = ""; // تفريغ حقل اختيار الملف تماماً
+    if (statusText) statusText.textContent = "يرجى رفع صورة (Screenshot) إيصال التحويل لنتحقق من المبلغ تلقائياً.";
+}
 
         // دالة الفحص الذكي للـ Screenshot واستخراج المبلغ ومقارنته بالطلب
         async function processReceiptImage() {
