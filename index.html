@@ -497,7 +497,7 @@
         }
 
         // دالة الفحص الذكي للـ Screenshot واستخراج المبلغ ومقارنته بالطلب
-        async function processReceiptImage() {
+       async function processReceiptImage() {
             const fileInput = document.getElementById('receiptFileInput');
             const statusText = document.getElementById('ocrStatusText');
             const verifyBtn = document.getElementById('btnVerifyReceipt');
@@ -509,47 +509,46 @@
 
             const file = fileInput.files[0];
             verifyBtn.disabled = true;
-            statusText.textContent = "جاري قراءة وفحص الإيصال بالذكاء الاصطناعي، يرجى الانتظار...";
+            statusText.textContent = "جاري قراءة وفحص الإيصال، يرجى الانتظار...";
 
             const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
             const delivery = state.settings.deliveryFee || 11;
             const expectedTotal = subtotal + delivery;
 
-            try {
-                // استخدام Tesseract لقراءة النصوص العربية والإنجليزية من الصورة
-                const { data: { text } } = await Tesseract.recognize(file, 'ara+eng');
-                
-                // تنظيف النصوص والبحث عن أرقام مطابقة للمبلغ الإجمالي أو قريبة منه
-                const cleanText = text.replace(/\s+/g, '');
-                console.log("OCR Extracted Text:", cleanText);
+            // مؤقت زمني (Timeout) لمنع تجمد الزر إذا تعذر تحميل ملفات الفحص في تطبيق الهاتف
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("OCR Timeout")), 12000)
+            );
 
-                // التحقق ما إذا كان المبلغ الإجمالي موجوداً في النصوص المستخرجة
+            try {
+                const recognitionPromise = Tesseract.recognize(file, 'ara+eng');
+                const { data: { text } } = await Promise.race([recognitionPromise, timeoutPromise]);
+                
+                const cleanText = text.replace(/\s+/g, '');
                 const foundAmount = cleanText.includes(String(expectedTotal)) || cleanText.includes(String(expectedTotal) + '.00');
 
                 if (foundAmount) {
                     statusText.textContent = "✅ تم التحقق من الإيصال والمبلغ بنجاح!";
-                    showToast("تم التحقق من الدفع بنجاح!", "fa-circle-check", 3000);
-                    
+                    showToast("تم التحقق من الدفع بنجاح!", "fa-circle-check", 2500);
                     setTimeout(() => {
                         closeUploadModal();
                         submitOrder("تم الدفع بنجاح عبر InstaPay (مؤكد بالذكاء الاصطناعي)");
-                    }, 1500);
+                    }, 1000);
                 } else {
-                    statusText.textContent = "⚠️ لم نتمكن من مطابقة المبلغ تلقائياً. سيتم إرسال الطلب للمراجعة اليدوية.";
-                    showToast("لم يتم مطابقة المبلغ تلقائياً، جاري إرسال الطلب للمراجعة", "fa-triangle-exclamation", 4000);
-                    
+                    statusText.textContent = "⚠️ لم يتم مطابقة المبلغ تلقائياً. جاري إرسال الطلب للمراجعة اليدوية.";
+                    showToast("جاري إرسال الطلب للمراجعة اليدوية للإيصال", "fa-triangle-exclamation", 3000);
                     setTimeout(() => {
                         closeUploadModal();
                         submitOrder("تم الدفع بـ InstaPay (قيد المراجعة اليدوية للإيصال)");
-                    }, 2000);
+                    }, 1000);
                 }
             } catch (err) {
-                console.error("OCR Error:", err);
-                statusText.textContent = "حدث خطأ أثناء قراءة الصورة، سيتم إرسال الطلب للمراجعة.";
+                console.error("OCR Error or Timeout:", err);
+                statusText.textContent = "⚠️ تعذر الفحص الآلي، جاري إرسال الطلب للمراجعة اليدوية...";
                 setTimeout(() => {
                     closeUploadModal();
-                    submitOrder("تم الدفع بـ InstaPay (يتطلب فحص الإيصال)");
-                }, 2000);
+                    submitOrder("تم الدفع بـ InstaPay (قيد المراجعة اليدوية للإيصال)");
+                }, 1000);
             } finally {
                 verifyBtn.disabled = false;
             }
