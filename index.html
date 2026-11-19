@@ -443,6 +443,24 @@
     <script>
         const INSTAPAY_PHONE = "01002669119";
 
+        function parseStoreOpenValue(val) {
+            if (typeof val === 'undefined' || val === null) return true;
+            if (val === false) return false;
+            const norm = String(val).trim().toLowerCase();
+            if (norm === 'false' || norm === '0' || norm === 'no' || norm === 'closed' || norm === 'مغلق' || norm === 'متوقف') {
+                return false;
+            }
+            return true;
+        }
+
+        function isStoreOpenForOrders() {
+            if (state.settings && state.settings.storeOpen === false) {
+                showToast("غير مسموح بعمل طلبات جديدة الان", "fa-circle-xmark", 3500);
+                return false;
+            }
+            return true;
+        }
+
         document.addEventListener('change', function(e) {
             if (e.target.name === 'paymentMethod') {
                 const box = document.getElementById('instapayActionBox');
@@ -459,6 +477,7 @@
 
         function openInstaPaySmart(event) {
             if (event) event.preventDefault();
+            if (!isStoreOpenForOrders()) return;
             
             const fileInput = document.getElementById('receiptFileInput');
             const statusText = document.getElementById('ocrStatusText');
@@ -496,6 +515,8 @@
         }
 
        async function processReceiptImage() {
+            if (!isStoreOpenForOrders()) return;
+
             const fileInput = document.getElementById('receiptFileInput');
             const statusText = document.getElementById('ocrStatusText');
             const verifyBtn = document.getElementById('btnVerifyReceipt');
@@ -684,7 +705,8 @@
             user: JSON.parse(localStorage.getItem('miro_user')) || null,
             settings: {
                 scriptUrl: "https://script.google.com/macros/s/AKfycbwr6ZNydBbxhvmF4vmUVGGhv5AqhjguThzBV5j0N5xS-2ILwvNGFY5ojvJ74HBpk047/exec",
-                deliveryFee: 11
+                deliveryFee: 11,
+                storeOpen: true
             },
             cart: JSON.parse(localStorage.getItem('miro_cart')) || [],
             products: mockProducts,
@@ -861,8 +883,15 @@
                         renderProducts(state.products);
                     }
 
-                    if (data.settings && typeof data.settings.deliveryFee !== 'undefined' && !isNaN(data.settings.deliveryFee)) {
-                        state.settings.deliveryFee = Number(data.settings.deliveryFee);
+                    if (data.settings) {
+                        if (typeof data.settings.deliveryFee !== 'undefined' && !isNaN(data.settings.deliveryFee)) {
+                            state.settings.deliveryFee = Number(data.settings.deliveryFee);
+                        }
+                        if (typeof data.settings.storeOpen !== 'undefined') {
+                            state.settings.storeOpen = parseStoreOpenValue(data.settings.storeOpen);
+                        } else if (typeof data.settings.store_open !== 'undefined') {
+                            state.settings.storeOpen = parseStoreOpenValue(data.settings.store_open);
+                        }
                     }
                     updateCartUI();
                 }
@@ -1167,6 +1196,8 @@
         }
 
         async function submitOrder(customPaymentStatus = null) {
+            if (!isStoreOpenForOrders()) return;
+
             if (!state.user) {
                 showToast(state.lang === 'ar' ? "يرجى تسجيل الدخول أولاً لتأكيد الطلب!" : "Please sign in first!", "fa-user-lock");
                 openLoginModal('signin');
