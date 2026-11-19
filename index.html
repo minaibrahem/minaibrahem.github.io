@@ -461,6 +461,21 @@
             return true;
         }
 
+        function isOrderRejectedByServer(resData) {
+            if (!resData || typeof resData !== 'object') return false;
+            if (resData.ok === false || resData.success === false) return true;
+            if (resData.storeOpen === false || resData.store_open === false) return true;
+            const st = String(resData.status || '').trim().toLowerCase();
+            if (st === 'closed' || st === 'store_closed' || st === 'orders_closed' || st === 'rejected' || st === 'error' || st === 'disabled') {
+                return true;
+            }
+            const msg = String(resData.message || resData.error || '').trim();
+            if (msg.includes('غير مسموح') || msg.includes('متوقف') || msg.includes('مغلق') || msg.toLowerCase().includes('closed')) {
+                return true;
+            }
+            return false;
+        }
+
         document.addEventListener('change', function(e) {
             if (e.target.name === 'paymentMethod') {
                 const box = document.getElementById('instapayActionBox');
@@ -849,27 +864,48 @@
                         }
                     }
 
+                    if (data.settings) {
+                        if (typeof data.settings.deliveryFee !== 'undefined' && !isNaN(data.settings.deliveryFee)) {
+                            state.settings.deliveryFee = Number(data.settings.deliveryFee);
+                        }
+                        if (typeof data.settings.storeOpen !== 'undefined') {
+                            state.settings.storeOpen = parseStoreOpenValue(data.settings.storeOpen);
+                        } else if (typeof data.settings.store_open !== 'undefined') {
+                            state.settings.storeOpen = parseStoreOpenValue(data.settings.store_open);
+                        }
+                    }
+
                     if (data.orders && Array.isArray(data.orders)) {
+                        const phoneClean = (state.user && state.user.phone) ? String(state.user.phone).trim() : null;
+                        const userSheetOrders = phoneClean
+                            ? data.orders.filter(o => String(o.phone || '').trim() === phoneClean)
+                            : [];
+
                         let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
-                        let updatedLocalOrders = localOrders.map(local => {
-                            const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
-                            if (foundInSheet && foundInSheet.status !== local.status) {
-                                addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
-                            }
-                            return foundInSheet ? { ...local, status: foundInSheet.status, payment: foundInSheet.payment || local.payment, date: foundInSheet.date || local.date } : local;
-                        });
-                        
-                        if (state.user && state.user.phone) {
-                            const phoneClean = String(state.user.phone).trim();
-                            data.orders.forEach(sheetOrder => {
-                                if (String(sheetOrder.phone).trim() === phoneClean) {
-                                    if (!updatedLocalOrders.some(l => String(l.id).trim() === String(sheetOrder.id).trim())) {
-                                        updatedLocalOrders.push(sheetOrder);
-                                    }
+
+                        if (phoneClean) {
+                            // الإبقاء فقط على الطلبات الموجودة فعلاً في شيت Orders لهذا العميل
+                            const mergedById = new Map();
+                            userSheetOrders.forEach(sheetOrder => {
+                                const oid = String(sheetOrder.id).trim();
+                                const prevLocal = localOrders.find(l => String(l.id).trim() === oid);
+                                if (prevLocal && prevLocal.status !== sheetOrder.status) {
+                                    addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${oid} تغيرت حالته إلى: ${sheetOrder.status}`);
                                 }
+                                mergedById.set(oid, prevLocal ? { ...prevLocal, ...sheetOrder } : sheetOrder);
+                            });
+                            localOrders = Array.from(mergedById.values());
+                        } else {
+                            localOrders = localOrders.map(local => {
+                                const foundInSheet = data.orders.find(o => String(o.id).trim() === String(local.id).trim());
+                                if (foundInSheet && foundInSheet.status !== local.status) {
+                                    addNotificationToCenter("تحديث حالة الطلب 📦", `طلبك رقم ${local.id} تغيرت حالته إلى: ${foundInSheet.status}`);
+                                }
+                                return foundInSheet ? { ...local, status: foundInSheet.status, payment: foundInSheet.payment || local.payment, date: foundInSheet.date || local.date } : local;
                             });
                         }
-                        localStorage.setItem('miro_orders', JSON.stringify(updatedLocalOrders));
+
+                        localStorage.setItem('miro_orders', JSON.stringify(localOrders));
                         updateOrdersHistoryUI();
                     }
 
@@ -883,16 +919,6 @@
                         renderProducts(state.products);
                     }
 
-                    if (data.settings) {
-                        if (typeof data.settings.deliveryFee !== 'undefined' && !isNaN(data.settings.deliveryFee)) {
-                            state.settings.deliveryFee = Number(data.settings.deliveryFee);
-                        }
-                        if (typeof data.settings.storeOpen !== 'undefined') {
-                            state.settings.storeOpen = parseStoreOpenValue(data.settings.storeOpen);
-                        } else if (typeof data.settings.store_open !== 'undefined') {
-                            state.settings.storeOpen = parseStoreOpenValue(data.settings.store_open);
-                        }
-                    }
                     updateCartUI();
                 }
             } catch (err) {
@@ -1195,6 +1221,14 @@
             document.getElementById('grandTotalPrice').textContent = `${subtotal + delivery} ${l.egp}`;
         }
 
+        function resetSubmitOrderButton() {
+            const btn = document.getElementById('btnSubmitOrder');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-check-circle text-base"></i> <span>${i18n[state.lang].confirmOrder}</span>`;
+            }
+        }
+
         async function submitOrder(customPaymentStatus = null) {
             if (!isStoreOpenForOrders()) return;
 
@@ -1235,14 +1269,26 @@
                 client_request_id: clientRequestId
             };
 
-            let newOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-            const currentTime = new Date().toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true, year: 'numeric', month: '2-digit', day: '2-digit' });
-
+            let resData = null;
             try {
                 const response = await fetch(state.settings.scriptUrl, { method: 'POST', body: JSON.stringify(payload) });
-                const resData = await response.json();
-                if (resData.id) newOrderId = resData.id;
-            } catch (e) { console.log(e); }
+                resData = await response.json();
+            } catch (e) {
+                console.log("Submit order error:", e);
+                resetSubmitOrderButton();
+                showToast(state.lang === 'ar' ? "تعذر إرسال الطلب إلى السيرفر، حاول مرة أخرى." : "Failed to send order to server.", "fa-circle-xmark");
+                return;
+            }
+
+            if (isOrderRejectedByServer(resData)) {
+                state.settings.storeOpen = false;
+                resetSubmitOrderButton();
+                showToast("غير مسموح بعمل طلبات جديدة الان", "fa-circle-xmark", 3500);
+                return;
+            }
+
+            const newOrderId = resData && resData.id ? String(resData.id) : ('ORD-' + Math.floor(100000 + Math.random() * 900000));
+            const currentTime = new Date().toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true, year: 'numeric', month: '2-digit', day: '2-digit' });
 
             let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
             localOrders.unshift({ 
@@ -1262,11 +1308,7 @@
             renderProducts(state.products);
             updateCartUI();
             updateOrdersHistoryUI();
-
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-check-circle text-base"></i> <span>${i18n[state.lang].confirmOrder}</span>`;
-            }
+            resetSubmitOrderButton();
 
             showToast(state.lang === 'ar' ? "تم إرسال طلبك بنجاح!" : "Order sent successfully!", "fa-circle-check");
             switchTab('account');
@@ -1317,7 +1359,7 @@
             } else {
                 tabUp.className = "w-1/2 pb-2 border-b-2 border-amazon-orange text-amazon-navy";
                 tabIn.className = "w-1/2 pb-2 text-gray-400 border-b-2 border-transparent";
-                signupFields.classList.add('hidden');
+                signupFields.classList.remove('hidden');
                 forgotPassBtn.classList.add('hidden');
             }
         }
