@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>إدارة Miro MarkEt | لوحة المشغل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- OneSignal Web SDK لإستقبال الإشعارات الفورية للمشغل -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          var host = window.location.hostname || "";
+          var isAllowedOrigin = host.endsWith("minaibrahem.github.io") || host === "localhost" || host === "127.0.0.1";
+          if (!isAllowedOrigin) return;
+
+          await OneSignal.init({
+            appId: "8075561a-0c1e-4c91-923a-a0afab42831c",
+            allowLocalhostAsSecureOrigin: true
+          });
+          await OneSignal.Slidedown.promptPush();
+          await OneSignal.login("admin_miro");
+          OneSignal.User.addTag("role", "admin");
+
+          OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
+              var n = event.notification;
+              if (n) {
+                  playNotificationAlert();
+                  addAdminNotif(n.title || "إشعار جديد", n.body || "");
+                  fetchAdminData(true);
+              }
+          });
+        } catch (e) { console.log("OneSignal Admin Error:", e); }
+      });
+    </script>
+
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="pb-24 text-gray-900 select-none">
+
+    <!-- Toast Notification -->
+    <div id="adminToast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
+        <div class="bg-gray-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-amber-400 min-w-[290px]">
+            <i id="toastIcon" class="fa-solid fa-bell text-amber-400 text-lg"></i>
+            <span id="toastText" class="text-xs font-bold leading-relaxed"></span>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-[#131921] text-white sticky top-0 z-40 shadow-md pt-4 pb-3 px-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved text-amber-400 text-xl"></i>
+                <div>
+                    <h1 class="font-black text-base tracking-wide text-amber-400">Miro MarkEt <span class="text-white text-xs bg-emerald-600 px-2 py-0.5 rounded-md mr-1">المشغل</span></h1>
+                    <p id="storeStatusBadge" class="text-[11px] text-emerald-400 font-bold mt-0.5">● المتجر مفتوح ويستقبل الطلبات</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="openNotifDrawer()" class="relative bg-[#232f3e] p-2.5 rounded-xl border border-gray-700">
+                    <i class="fa-solid fa-bell text-amber-400"></i>
+                    <span id="adminNotifBadge" class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                </button>
+                <button onclick="fetchAdminData()" class="bg-[#232f3e] p-2.5 rounded-xl border border-gray-700 text-emerald-400 active:scale-95 transition">
+                    <i id="refreshIcon" class="fa-solid fa-rotate"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-md mx-auto p-3 space-y-4">
+
+        <!-- 1. صفحة طلبات الشراء -->
+        <section id="page-orders" class="admin-page space-y-4">
+            <!-- شريط إحصائيات سريع -->
+            <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100">
+                    <span class="text-[10px] text-gray-500 block font-bold">طلبات اليوم</span>
+                    <strong id="statTodayCount" class="text-base font-black text-emerald-700">0</strong>
+                </div>
+                <div class="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100">
+                    <span class="text-[10px] text-gray-500 block font-bold">قيد الانتظار</span>
+                    <strong id="statPendingCount" class="text-base font-black text-amber-600">0</strong>
+                </div>
+                <div class="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100">
+                    <span class="text-[10px] text-gray-500 block font-bold">طلبات إلغاء</span>
+                    <strong id="statCancelCount" class="text-base font-black text-red-600">0</strong>
+                </div>
+            </div>
+
+            <!-- قائمة الطلبات: تاريخ اليوم ثم الأيام السابقة التي بها طلبات فقط -->
+            <div id="ordersGroupedContainer" class="space-y-5"></div>
+        </section>
+
+        <!-- 2. صفحة طلبات تسجيل العملاء -->
+        <section id="page-customers" class="admin-page hidden space-y-3">
+            <div class="flex items-center justify-between px-1">
+                <h2 class="font-extrabold text-sm text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-amber-500"></i> طلبات تسجيل العملاء
+                </h2>
+                <span id="customersCountBadge" class="text-xs font-bold text-gray-500"></span>
+            </div>
+            <div id="customersList" class="space-y-3"></div>
+        </section>
+
+        <!-- 3. صفحة المنتجات والأسعار -->
+        <section id="page-products" class="admin-page hidden space-y-3">
+            <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 space-y-2">
+                <h2 class="font-extrabold text-sm text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-stacked text-emerald-600"></i> إدارة المنتجات المتاحة والأسعار
+                </h2>
+                <input type="text" id="adminProdSearch" oninput="renderProductsAdmin()" placeholder="ابحث باسم المنتج..." class="w-full text-xs p-2.5 bg-gray-50 border rounded-xl focus:outline-none focus:border-emerald-600">
+            </div>
+            <div id="adminProductsList" class="space-y-2.5"></div>
+        </section>
+
+        <!-- 4. صفحة التحكم في عمل الأوردرات -->
+        <section id="page-control" class="admin-page hidden space-y-4">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center space-y-4">
+                <div id="storeControlIconBox" class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-3xl">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <div>
+                    <h2 class="font-black text-base text-gray-800">حالة استقبال الطلبات في المتجر</h2>
+                    <p id="storeControlDesc" class="text-xs text-gray-500 mt-1">المتجر مفتوح حالياً ويستقبل طلبات العملاء بشكل طبيعي.</p>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 pt-2">
+                    <button onclick="toggleStoreStatus(true)" id="btnOpenStore" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl shadow flex items-center justify-center gap-2 text-sm transition">
+                        <i class="fa-solid fa-circle-play text-lg"></i> تشغيل الأوردرات (فتح المتجر)
+                    </button>
+
+                    <button onclick="toggleStoreStatus(false)" id="btnCloseStore" class="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl shadow flex items-center justify-center gap-2 text-sm transition">
+                        <i class="fa-solid fa-circle-stop text-lg"></i> إيقاف عمل الأوردرات مؤقتاً
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-400 bg-gray-50 p-2.5 rounded-xl border">
+                    عند إيقاف الأوردرات، ستظهر للعميل رسالة: <strong class="text-red-600">"غير مسموح بعمل طلبات جديدة الان"</strong> ولن يتمكن من إرسال أي طلب.
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 px-1 py-2 flex justify-around items-center z-40 shadow-lg">
+        <button onclick="switchAdminTab('orders')" id="tab-btn-orders" class="admin-nav flex flex-col items-center w-1/4 text-amber-600 font-extrabold">
+            <i class="fa-solid fa-cart-arrow-down text-lg"></i>
+            <span class="text-[10px] mt-1">طلبات الشراء</span>
+        </button>
+        <button onclick="switchAdminTab('customers')" id="tab-btn-customers" class="admin-nav flex flex-col items-center w-1/4 text-gray-500 font-semibold">
+            <div class="relative">
+                <i class="fa-solid fa-user-check text-lg"></i>
+                <span id="pendingCustDot" class="hidden absolute -top-1 -right-2 w-2.5 h-2.5 bg-red-600 rounded-full border border-white"></span>
+            </div>
+            <span class="text-[10px] mt-1">العملاء</span>
+        </button>
+        <button onclick="switchAdminTab('products')" id="tab-btn-products" class="admin-nav flex flex-col items-center w-1/4 text-gray-500 font-semibold">
+            <i class="fa-solid fa-tags text-lg"></i>
+            <span class="text-[10px] mt-1">المنتجات</span>
+        </button>
+        <button onclick="switchAdminTab('control')" id="tab-btn-control" class="admin-nav flex flex-col items-center w-1/4 text-gray-500 font-semibold">
+            <i class="fa-solid fa-power-off text-lg"></i>
+            <span class="text-[10px] mt-1">التحكم</span>
+        </button>
+    </nav>
+
+    <!-- Notification Modal -->
+    <div id="notifDrawer" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md p-4 max-h-[80vh] flex flex-col space-y-3">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-sm"><i class="fa-solid fa-bell text-amber-500 ml-1"></i> سجل إشعارات المشغل</h3>
+                <div class="flex gap-3">
+                    <button onclick="clearAdminNotifs()" class="text-xs text-red-600 font-bold">مسح الكل</button>
+                    <button onclick="closeNotifDrawer()" class="text-gray-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+            </div>
+            <div id="adminNotifList" class="overflow-y-auto space-y-2 flex-1 text-xs"></div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxA-zkChiW8DkrYbcU2_FiqQflnLVWlEbbUHUMbfLKSLe4d6xdFHfF1qcleyTBV5L-1/exec";
+
+        let adminState = {
+            orders: [],
+            customers: [],
+            products: [],
+            storeOpen: true,
+            isFirstFetchDone: false,
+            knownOrderIds: new Set(JSON.parse(localStorage.getItem('admin_known_orders') || '[]')),
+            knownCustomerPhones: new Set(JSON.parse(localStorage.getItem('admin_known_custs') || '[]')),
+            knownCancelIds: new Set(JSON.parse(localStorage.getItem('admin_known_cancels') || '[]')),
+            notifications: JSON.parse(localStorage.getItem('admin_notifs') || '[]')
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderAdminNotifs();
+            renderOrdersAdmin();
+            fetchAdminData();
+            setInterval(() => fetchAdminData(true), 12000);
+        });
+
+        async function postToScript(payloadObj) {
+            const params = new URLSearchParams();
+            params.append('payload', JSON.stringify(payloadObj));
+            Object.keys(payloadObj).forEach(key => {
+                params.append(key, String(payloadObj[key]));
+            });
+
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                body: params
+            });
+            const text = await res.text();
+            console.log("POST Response for", payloadObj.action, ":", text);
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return { raw: text };
+            }
+        }
+
+        function showAdminToast(msg, icon = 'fa-circle-check') {
+            const toast = document.getElementById('adminToast');
+            document.getElementById('toastText').textContent = msg;
+            document.getElementById('toastIcon').className = `fa-solid ${icon} text-amber-400 text-lg`;
+            toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
+            }, 3500);
+        }
+
+        function playNotificationAlert() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.35);
+            } catch (e) {}
+        }
+
+        function addAdminNotif(title, body) {
+            adminState.notifications.unshift({
+                id: Date.now() + Math.random(),
+                title,
+                body,
+                time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                unread: true
+            });
+            if (adminState.notifications.length > 50) adminState.notifications.pop();
+            localStorage.setItem('admin_notifs', JSON.stringify(adminState.notifications));
+            renderAdminNotifs();
+        }
+
+        function renderAdminNotifs() {
+            const badge = document.getElementById('adminNotifBadge');
+            const list = document.getElementById('adminNotifList');
+            const unread = adminState.notifications.filter(n => n.unread).length;
+            if (unread > 0) {
+                badge.textContent = unread;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+            if (adminState.notifications.length === 0) {
+                list.innerHTML = `<p class="text-center text-gray-400 py-6">لا توجد إشعارات</p>`;
+                return;
+            }
+            list.innerHTML = adminState.notifications.map(n => `
+                <div class="p-3 rounded-xl border ${n.unread ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}">
+                    <div class="flex justify-between font-bold text-gray-800">
+                        <span>${n.title}</span>
+                        <span class="text-[10px] text-gray-400">${n.time}</span>
+                    </div>
+                    <p class="text-gray-600 mt-1">${n.body}</p>
+                </div>
+            `).join('');
+        }
+
+        function openNotifDrawer() {
+            adminState.notifications.forEach(n => n.unread = false);
+            localStorage.setItem('admin_notifs', JSON.stringify(adminState.notifications));
+            renderAdminNotifs();
+            document.getElementById('notifDrawer').classList.remove('hidden');
+        }
+        function closeNotifDrawer() { document.getElementById('notifDrawer').classList.add('hidden'); }
+        function clearAdminNotifs() {
+            adminState.notifications = [];
+            localStorage.setItem('admin_notifs', '[]');
+            renderAdminNotifs();
+        }
+
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-page').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`page-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.admin-nav').forEach(b => {
+                b.classList.remove('text-amber-600', 'font-extrabold');
+                b.classList.add('text-gray-500', 'font-semibold');
+            });
+            const active = document.getElementById(`tab-btn-${tab}`);
+            active.classList.remove('text-gray-500', 'font-semibold');
+            active.classList.add('text-amber-600', 'font-extrabold');
+        }
+
+        async function fetchAdminData(isSilent = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (!isSilent && refreshIcon) refreshIcon.classList.add('animate-spin');
+
+            try {
+                const url = `${SCRIPT_URL}?action=getAll&admin=true&_nocache=${Date.now()}`;
+                const res = await fetch(url, { cache: "no-store" });
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const data = await res.json();
+
+                const isFirstLoad = !adminState.isFirstFetchDone && adminState.knownOrderIds.size === 0 && adminState.knownCustomerPhones.size === 0;
+
+                if (Array.isArray(data.orders)) {
+                    data.orders.forEach(o => {
+                        if (!adminState.knownOrderIds.has(o.id)) {
+                            adminState.knownOrderIds.add(o.id);
+                            if (!isFirstLoad) {
+                                playNotificationAlert();
+                                addAdminNotif("🛒 طلب شراء جديد", `العميل: ${o.name} | الإجمالي: ${o.total} ج.م (${o.id})`);
+                                showAdminToast(`طلب شراء جديد من ${o.name}`, 'fa-cart-plus');
+                            }
+                        }
+                        if (String(o.status).includes('طلب إلغاء') && !adminState.knownCancelIds.has(o.id)) {
+                            adminState.knownCancelIds.add(o.id);
+                            if (!isFirstLoad) {
+                                playNotificationAlert();
+                                addAdminNotif("⚠️ طلب إلغاء أوردر", `العميل ${o.name} طلب إلغاء الأوردر ${o.id}`);
+                                showAdminToast(`طلب إلغاء للأوردر ${o.id}`, 'fa-triangle-exclamation');
+                            }
+                        }
+                    });
+                    localStorage.setItem('admin_known_orders', JSON.stringify([...adminState.knownOrderIds]));
+                    localStorage.setItem('admin_known_cancels', JSON.stringify([...adminState.knownCancelIds]));
+                    adminState.orders = data.orders;
+                }
+
+                if (Array.isArray(data.customers)) {
+                    data.customers.forEach(c => {
+                        if (!adminState.knownCustomerPhones.has(c.phone)) {
+                            adminState.knownCustomerPhones.add(c.phone);
+                            if (!isFirstLoad) {
+                                playNotificationAlert();
+                                addAdminNotif("👤 طلب تسجيل عميل", `الاسم: ${c.name} | الهاتف: ${c.phone}`);
+                                showAdminToast(`طلب تسجيل عميل جديد: ${c.name}`, 'fa-user-plus');
+                            }
+                        }
+                    });
+                    localStorage.setItem('admin_known_custs', JSON.stringify([...adminState.knownCustomerPhones]));
+                    adminState.customers = data.customers;
+                }
+
+                if (Array.isArray(data.products)) {
+                    adminState.products = data.products;
+                }
+
+                if (data.settings && typeof data.settings.storeOpen !== 'undefined') {
+                    adminState.storeOpen = Boolean(data.settings.storeOpen);
+                }
+
+                adminState.isFirstFetchDone = true;
+
+                renderOrdersAdmin();
+                renderCustomersAdmin();
+                renderProductsAdmin();
+                renderStoreControlUI();
+
+            } catch (err) {
+                console.error("Fetch Admin Data Error:", err);
+                if (!isSilent) showAdminToast("تعذر الاتصال بقاعدة البيانات", "fa-wifi");
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+            }
+        }
+
+        function parseOrderDateInfo(dateStr) {
+            const fallback = {
+                timestamp: 0,
+                dayStart: 0,
+                formattedDate: 'غير محدد',
+                hasValidDate: false
+            };
+
+            if (!dateStr) return fallback;
+
+            const clean = String(dateStr)
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                .trim();
+
+            let year, month, day;
+
+            const ymdMatch = clean.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+            if (ymdMatch) {
+                year = parseInt(ymdMatch[1], 10);
+                month = parseInt(ymdMatch[2], 10) - 1;
+                day = parseInt(ymdMatch[3], 10);
+            } else {
+                const dmyMatch = clean.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+                if (!dmyMatch) return fallback;
+
+                let p1 = parseInt(dmyMatch[1], 10);
+                let p2 = parseInt(dmyMatch[2], 10);
+                year = parseInt(dmyMatch[3], 10);
+                if (year < 100) year += 2000;
+
+                if (p2 > 12) {
+                    month = p1 - 1;
+                    day = p2;
+                } else {
+                    day = p1;
+                    month = p2 - 1;
+                }
+            }
+
+            let hours = 0, minutes = 0, seconds = 0;
+            const timeMatch = clean.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+            if (timeMatch) {
+                hours = parseInt(timeMatch[1], 10);
+                minutes = parseInt(timeMatch[2], 10);
+                seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+
+                const isPM = clean.includes('م') || clean.toLowerCase().includes('pm');
+                const isAM = clean.includes('ص') || clean.toLowerCase().includes('am');
+                if (isPM && hours < 12) hours += 12;
+                if (isAM && hours === 12) hours = 0;
+            }
+
+            const dateObj = new Date(year, month, day, hours, minutes, seconds);
+            if (isNaN(dateObj.getTime())) return fallback;
+
+            const dayStart = new Date(year, month, day).getTime();
+            const pad = n => String(n).padStart(2, '0');
+            const formattedDate = `${pad(day)}/${pad(month + 1)}/${year}`;
+
+            return {
+                timestamp: dateObj.getTime(),
+                dayStart: dayStart,
+                formattedDate: formattedDate,
+                hasValidDate: true
+            };
+        }
+
+        function buildOrderCardHtml(o) {
+            const st = String(o.status || 'قيد الانتظار').trim();
+            let badgeColor = 'bg-amber-100 text-amber-800';
+            if (st === 'مقبول') badgeColor = 'bg-blue-100 text-blue-800';
+            else if (st === 'تم التوصيل') badgeColor = 'bg-emerald-100 text-emerald-800';
+            else if (st === 'تم الالغاء') badgeColor = 'bg-red-100 text-red-800';
+            else if (st.includes('طلب إلغاء')) badgeColor = 'bg-orange-100 text-orange-800 border border-orange-300';
+
+            return `
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100 space-y-2.5">
+                <div class="flex justify-between items-start border-b pb-2">
+                    <div>
+                        <span class="text-xs font-black text-gray-900">${o.name || 'عميل'}</span>
+                        <a href="tel:${o.phone}" class="block text-[11px] text-emerald-700 font-bold" dir="ltr">${o.phone}</a>
+                    </div>
+                    <div class="text-left">
+                        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${badgeColor}">${st}</span>
+                        <span class="block text-[10px] text-gray-400 mt-1">${o.id}</span>
+                    </div>
+                </div>
+
+                <div class="text-xs text-gray-700 space-y-1">
+                    <p><strong class="text-gray-500">العنوان:</strong> ${o.address || '-'}</p>
+                    <p class="bg-gray-50 p-2 rounded-lg border text-[11px] leading-relaxed"><strong>المنتجات:</strong> ${o.items || '-'}</p>
+                    <div class="flex justify-between items-center pt-1 font-bold">
+                        <span class="text-emerald-700 text-sm">الإجمالي: ${o.total} ج.م</span>
+                        <span class="text-[10px] bg-purple-50 text-purple-800 px-2 py-0.5 rounded border border-purple-200">${o.payment}</span>
+                    </div>
+                    <p class="text-[10px] text-gray-400">${o.date}</p>
+                </div>
+
+                <div class="grid grid-cols-4 gap-1.5 pt-2 border-t">
+                    <button onclick="updateOrderStatus('${o.id}', 'قيد الانتظار')" class="py-1.5 rounded-lg text-[10px] font-bold border transition ${st === 'قيد الانتظار' ? 'bg-amber-500 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-200'}">قيد الانتظار</button>
+                    <button onclick="updateOrderStatus('${o.id}', 'مقبول')" class="py-1.5 rounded-lg text-[10px] font-bold border transition ${st === 'مقبول' ? 'bg-blue-600 text-white border-blue-700' : 'bg-blue-50 text-blue-800 border-blue-200'}">مقبول</button>
+                    <button onclick="updateOrderStatus('${o.id}', 'تم التوصيل')" class="py-1.5 rounded-lg text-[10px] font-bold border transition ${st === 'تم التوصيل' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}">تم التوصيل</button>
+                    <button onclick="updateOrderStatus('${o.id}', 'تم الالغاء')" class="py-1.5 rounded-lg text-[10px] font-bold border transition ${st === 'تم الالغاء' ? 'bg-red-600 text-white border-red-700' : 'bg-red-50 text-red-800 border-red-200'}">تم الالغاء</button>
+                </div>
+            </div>`;
+        }
+
+        function renderOrdersAdmin() {
+            const container = document.getElementById('ordersGroupedContainer');
+
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const ONE_DAY_MS = 86400000;
+            const pad = n => String(n).padStart(2, '0');
+            const todayFormatted = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+            let todayCount = 0, pendingCount = 0, cancelCount = 0;
+
+            const enriched = adminState.orders.map((o, idx) => {
+                const st = String(o.status || 'قيد الانتظار').trim();
+                if (st === 'قيد الانتظار') pendingCount++;
+                if (st.includes('إلغاء') && st !== 'تم الالغاء') cancelCount++;
+
+                const info = parseOrderDateInfo(o.date);
+                if (info.dayStart === todayStart) todayCount++;
+
+                return { ...o, _info: info, _sheetIndex: idx };
+            });
+
+            enriched.sort((a, b) => {
+                if (b._info.timestamp !== a._info.timestamp) {
+                    return b._info.timestamp - a._info.timestamp;
+                }
+                return a._sheetIndex - b._sheetIndex;
+            });
+
+            document.getElementById('statTodayCount').textContent = todayCount;
+            document.getElementById('statPendingCount').textContent = pendingCount;
+            document.getElementById('statCancelCount').textContent = cancelCount;
+
+            const todayOrders = enriched.filter(item => item._info.dayStart === todayStart);
+            let html = `
+            <div class="space-y-2.5">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-day text-emerald-600"></i> تاريخ اليوم ${todayFormatted}
+                    </h2>
+                    <span class="text-[11px] font-bold bg-white px-2.5 py-0.5 rounded-lg border ${todayOrders.length > 0 ? 'text-emerald-700 border-emerald-200' : 'text-gray-400'}">
+                        ${todayOrders.length} طلب
+                    </span>
+                </div>
+                <div class="space-y-3">
+                    ${todayOrders.length > 0
+                        ? todayOrders.map(buildOrderCardHtml).join('')
+                        : `<div class="bg-white/80 border border-dashed border-gray-300 rounded-xl p-4 text-center text-xs text-gray-400 font-semibold">لا يوجد طلبات</div>`
+                    }
+                </div>
+            </div>`;
+
+            const pastGroupsMap = new Map();
+            enriched.forEach(item => {
+                if (!item._info.hasValidDate || item._info.dayStart === todayStart) return;
+
+                const key = item._info.dayStart;
+                if (!pastGroupsMap.has(key)) {
+                    const diffDays = Math.round((todayStart - item._info.dayStart) / ONE_DAY_MS);
+                    let label = `${item._info.formattedDate}`;
+                    if (diffDays === 1) label = `${item._info.formattedDate} (اليوم السابق)`;
+                    else if (diffDays === 2) label = `${item._info.formattedDate} (اليوم الأسبق)`;
+
+                    pastGroupsMap.set(key, {
+                        dayStart: item._info.dayStart,
+                        label: label,
+                        items: []
+                    });
+                }
+                pastGroupsMap.get(key).items.push(item);
+            });
+
+            const sortedPastGroups = Array.from(pastGroupsMap.values()).sort((a, b) => b.dayStart - a.dayStart);
+
+            sortedPastGroups.forEach(group => {
+                html += `
+                <div class="space-y-2.5 pt-3 border-t border-gray-200">
+                    <div class="flex items-center justify-between px-1">
+                        <h2 class="font-extrabold text-sm text-gray-700 flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-days text-gray-500"></i> ${group.label}
+                        </h2>
+                        <span class="text-[11px] font-bold bg-white px-2.5 py-0.5 rounded-lg border text-gray-600">
+                            ${group.items.length} طلب
+                        </span>
+                    </div>
+                    <div class="space-y-3">
+                        ${group.items.map(buildOrderCardHtml).join('')}
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function updateOrderStatus(orderId, newStatus) {
+            const cleanId = String(orderId || '').trim();
+            const target = adminState.orders.find(o => String(o.id).trim() === cleanId);
+            const oldStatus = target ? target.status : 'قيد الانتظار';
+
+            showAdminToast(`جاري تحديث حالة الطلب إلى (${newStatus})...`, 'fa-spinner fa-spin');
+            try {
+                const res = await postToScript({ action: 'admin_update_order', order_id: cleanId, status: newStatus });
+                if (res && res.status === 'error') throw new Error(res.message || 'Error');
+                if (target) target.status = newStatus;
+                renderOrdersAdmin();
+                showAdminToast(`تم تحديث الطلب ${cleanId} إلى ${newStatus}`);
+                setTimeout(() => fetchAdminData(true), 2000);
+            } catch (e) {
+                console.error(e);
+                if (target) target.status = oldStatus;
+                renderOrdersAdmin();
+                showAdminToast("حدث خطأ أثناء التحديث في الشيت", "fa-circle-xmark");
+            }
+        }
+
+        function renderCustomersAdmin() {
+            const container = document.getElementById('customersList');
+            const badge = document.getElementById('customersCountBadge');
+            const dot = document.getElementById('pendingCustDot');
+
+            const pendingCusts = adminState.customers.filter(c => c.status !== 'مفعل');
+            if (pendingCusts.length > 0) dot.classList.remove('hidden');
+            else dot.classList.add('hidden');
+
+            badge.textContent = `(${adminState.customers.length} عميل)`;
+
+            if (adminState.customers.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center bg-white p-5 rounded-xl">لا يوجد عملاء مسجلون</p>`;
+                return;
+            }
+
+            const sorted = [...adminState.customers].sort((a, b) => (a.status === 'مفعل' ? 1 : -1));
+
+            container.innerHTML = sorted.map(c => {
+                const isActive = c.status === 'مفعل';
+                return `
+                <div class="bg-white p-3.5 rounded-2xl shadow-sm border ${isActive ? 'border-gray-100' : 'border-amber-300 bg-amber-50/30'} space-y-2.5">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-sm text-gray-900">${c.name}</h3>
+                            <p class="text-xs text-emerald-700 font-bold" dir="ltr">${c.phone}</p>
+                            <p class="text-[11px] text-gray-500 mt-0.5">${c.address}</p>
+                            <p class="text-[10px] text-gray-400">${c.email} | ${c.date || ''}</p>
+                        </div>
+                        <span class="text-[10px] font-extrabold px-2.5 py-1 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                            ${isActive ? 'مفعل' : 'قيد الانتظار'}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t">
+                        <button onclick="updateCustomerStatus('${c.phone}', 'مفعل')" class="py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 ${isActive ? 'bg-emerald-600 text-white shadow' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">
+                            <i class="fa-solid fa-check"></i> مفعل
+                        </button>
+                        <button onclick="updateCustomerStatus('${c.phone}', 'قيد الانتظار')" class="py-2 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 ${!isActive ? 'bg-amber-500 text-white shadow' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
+                            <i class="fa-solid fa-clock"></i> قيد الانتظار
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function updateCustomerStatus(phone, status) {
+            const cleanPhone = String(phone || '').trim();
+            const cust = adminState.customers.find(c => String(c.phone).trim() === cleanPhone);
+            const oldStatus = cust ? cust.status : 'قيد الانتظار';
+
+            showAdminToast(`جاري تحديث حالة العميل...`, 'fa-spinner fa-spin');
+            try {
+                const res = await postToScript({ action: 'admin_update_customer', phone: cleanPhone, status });
+                if (res && (res.status === 'error' || res.status === 'not_found')) {
+                    throw new Error(res.status + ': ' + (res.message || 'Customer update failed'));
+                }
+                if (cust) cust.status = status;
+                renderCustomersAdmin();
+                showAdminToast(`تم تغيير حالة العميل إلى (${status})`);
+                setTimeout(() => fetchAdminData(true), 2000);
+            } catch (e) {
+                console.error("updateCustomerStatus failed:", e);
+                if (cust) cust.status = oldStatus;
+                renderCustomersAdmin();
+                showAdminToast("فشل تحديث حالة العميل في الشيت", "fa-circle-xmark");
+            }
+        }
+
+        function renderProductsAdmin() {
+            const container = document.getElementById('adminProductsList');
+            const term = (document.getElementById('adminProdSearch').value || '').toLowerCase().trim();
+            const filtered = adminState.products.filter(p => p.name.toLowerCase().includes(term));
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400 text-center bg-white p-5 rounded-xl">لا توجد منتجات مطابقة</p>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(p => `
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                        <img src="${p.image || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=200'}" class="w-12 h-12 rounded-xl object-cover bg-gray-100 shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <h4 class="font-bold text-xs text-gray-800 truncate">${p.name}</h4>
+                            <span class="text-[10px] text-gray-400">${p.category}</span>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <input type="number" id="price-input-${p.id}" value="${p.price}" class="w-20 text-xs font-bold p-1 border rounded-lg bg-gray-50 text-center">
+                                <span class="text-[10px] font-bold text-gray-500">ج.م</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-end gap-1.5 shrink-0">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 px-2 py-1 rounded-lg border">
+                            <input type="checkbox" id="avail-check-${p.id}" ${p.available ? 'checked' : ''} class="accent-emerald-600 w-4 h-4">
+                            <span class="text-[11px] font-bold ${p.available ? 'text-emerald-700' : 'text-red-600'}">${p.available ? 'متاح' : 'غير متاح'}</span>
+                        </label>
+                        <button onclick="saveProductAdmin('${p.id}')" class="bg-[#131921] text-amber-400 text-[11px] font-bold px-3 py-1.5 rounded-lg shadow active:scale-95 transition">
+                            <i class="fa-solid fa-floppy-disk ml-1"></i> حفظ
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function saveProductAdmin(prodId) {
+            const priceVal = Number(document.getElementById(`price-input-${prodId}`).value);
+            const availVal = document.getElementById(`avail-check-${prodId}`).checked;
+
+            showAdminToast("جاري حفظ تعديل المنتج...", "fa-spinner fa-spin");
+            try {
+                const res = await postToScript({
+                    action: 'admin_update_product',
+                    id: prodId,
+                    price: priceVal,
+                    available: availVal
+                });
+                if (res && res.status === 'error') throw new Error(res.message || 'Error');
+                const prod = adminState.products.find(p => String(p.id) === String(prodId));
+                if (prod) {
+                    prod.price = priceVal;
+                    prod.available = availVal;
+                }
+                renderProductsAdmin();
+                showAdminToast("تم حفظ السعر وحالة التوافر بنجاح");
+            } catch (e) {
+                console.error(e);
+                showAdminToast("حدث خطأ أثناء حفظ المنتج", "fa-circle-xmark");
+            }
+        }
+
+        function renderStoreControlUI() {
+            const badge = document.getElementById('storeStatusBadge');
+            const iconBox = document.getElementById('storeControlIconBox');
+            const desc = document.getElementById('storeControlDesc');
+
+            if (adminState.storeOpen) {
+                badge.textContent = "● المتجر مفتوح ويستقبل الطلبات";
+                badge.className = "text-[11px] text-emerald-400 font-bold mt-0.5";
+                iconBox.className = "w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-3xl";
+                desc.textContent = "المتجر مفتوح حالياً ويستقبل طلبات العملاء بشكل طبيعي.";
+            } else {
+                badge.textContent = "● المتجر متوقف عن استقبال الطلبات";
+                badge.className = "text-[11px] text-red-400 font-bold mt-0.5";
+                iconBox.className = "w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto text-3xl";
+                desc.textContent = "تم إيقاف عمل الأوردرات. لن يتمكن العملاء من إرسال طلبات جديدة الآن.";
+            }
+        }
+
+        async function toggleStoreStatus(isOpen) {
+            showAdminToast(isOpen ? "جاري تشغيل الأوردرات..." : "جاري إيقاف الأوردرات...", "fa-spinner fa-spin");
+            try {
+                const res = await postToScript({ action: 'admin_toggle_store', store_open: isOpen });
+                if (res && res.status === 'error') throw new Error(res.message || 'Error');
+                adminState.storeOpen = isOpen;
+                renderStoreControlUI();
+                showAdminToast(isOpen ? "تم تشغيل الأوردرات بنجاح" : "تم إيقاف عمل الأوردرات");
+            } catch (e) {
+                console.error(e);
+                showAdminToast("تعذر تغيير حالة المتجر", "fa-circle-xmark");
+            }
+        }
+    </script>
+</body>
+</html>
