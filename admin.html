@@ -503,7 +503,7 @@
             </div>`;
         }
 
-        function renderOrdersAdmin() {
+      function renderOrdersAdmin() {
             const container = document.getElementById('ordersGroupedContainer');
 
             const now = new Date();
@@ -536,7 +536,8 @@
             document.getElementById('statPendingCount').textContent = pendingCount;
             document.getElementById('statCancelCount').textContent = cancelCount;
 
-            const todayOrders = enriched.filter(item => item._info.dayStart === todayStart);
+            // 1. طلبات اليوم
+            const todayOrders = enriched.filter(item => item._info.hasValidDate && item._info.dayStart === todayStart);
             let html = `
             <div class="space-y-2.5">
                 <div class="flex items-center justify-between px-1">
@@ -555,9 +556,16 @@
                 </div>
             </div>`;
 
+            // 2. الأيام السابقة التي بها طلبات فقط
             const pastGroupsMap = new Map();
+            const unparsedOrders = [];
+
             enriched.forEach(item => {
-                if (!item._info.hasValidDate || item._info.dayStart === todayStart) return;
+                if (!item._info.hasValidDate) {
+                    unparsedOrders.push(item);
+                    return;
+                }
+                if (item._info.dayStart === todayStart) return;
 
                 const key = item._info.dayStart;
                 if (!pastGroupsMap.has(key)) {
@@ -593,6 +601,23 @@
                     </div>
                 </div>`;
             });
+
+            if (unparsedOrders.length > 0) {
+                html += `
+                <div class="space-y-2.5 pt-3 border-t border-gray-200">
+                    <div class="flex items-center justify-between px-1">
+                        <h2 class="font-extrabold text-sm text-gray-700 flex items-center gap-2">
+                            <i class="fa-solid fa-box text-gray-500"></i> طلبات أخرى
+                        </h2>
+                        <span class="text-[11px] font-bold bg-white px-2.5 py-0.5 rounded-lg border text-gray-600">
+                            ${unparsedOrders.length} طلب
+                        </span>
+                    </div>
+                    <div class="space-y-3">
+                        ${unparsedOrders.map(buildOrderCardHtml).join('')}
+                    </div>
+                </div>`;
+            }
 
             container.innerHTML = html;
         }
