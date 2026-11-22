@@ -443,6 +443,20 @@
     <script>
         const INSTAPAY_PHONE = "01002669119";
 
+        function normalizeComparablePhone(val) {
+            let digits = String(val || '')
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵٦٧٨٩'.indexOf(d))
+                .replace(/\D/g, '');
+            if (digits.startsWith('20') && digits.length >= 12) {
+                digits = digits.slice(2);
+            }
+            if (digits.length === 10 && digits.startsWith('1')) {
+                digits = '0' + digits;
+            }
+            return digits;
+        }
+
         function parseStoreOpenValue(val) {
             if (typeof val === 'undefined' || val === null) return true;
             if (val === false) return false;
@@ -847,8 +861,8 @@
                     if (data.customers && Array.isArray(data.customers)) {
                         state.customers = data.customers;
                         if (state.user && state.user.phone) {
-                            const loggedPhone = String(state.user.phone).trim();
-                            const currentCustData = state.customers.find(c => String(c.phone).trim() === loggedPhone);
+                            const loggedPhone = normalizeComparablePhone(state.user.phone);
+                            const currentCustData = state.customers.find(c => normalizeComparablePhone(c.phone) === loggedPhone);
                             if (currentCustData) {
                                 const statusStr = currentCustData.status ? String(currentCustData.status).trim() : 'قيد الانتظار';
                                 if (statusStr !== 'مفعل' && statusStr !== 'Approved') {
@@ -876,15 +890,14 @@
                     }
 
                     if (data.orders && Array.isArray(data.orders)) {
-                        const phoneClean = (state.user && state.user.phone) ? String(state.user.phone).trim() : null;
+                        const phoneClean = (state.user && state.user.phone) ? normalizeComparablePhone(state.user.phone) : null;
                         const userSheetOrders = phoneClean
-                            ? data.orders.filter(o => String(o.phone || '').trim() === phoneClean)
+                            ? data.orders.filter(o => normalizeComparablePhone(o.phone || '') === phoneClean)
                             : [];
 
                         let localOrders = JSON.parse(localStorage.getItem('miro_orders')) || [];
 
                         if (phoneClean) {
-                            // الإبقاء فقط على الطلبات الموجودة فعلاً في شيت Orders لهذا العميل
                             const mergedById = new Map();
                             userSheetOrders.forEach(sheetOrder => {
                                 const oid = String(sheetOrder.id).trim();
@@ -1378,16 +1391,21 @@
             const name = document.getElementById('authName').value.trim();
             const email = document.getElementById('authEmail').value.trim();
             const address = document.getElementById('authAddress').value.trim();
+            const authBtn = document.getElementById('btnAuthSubmitStep1');
 
             if (!phone || !password) {
                 showToast(state.lang === 'ar' ? "يرجى إدخال رقم الجوال وكلمة المرور!" : "Please enter phone and password!", "fa-circle-exclamation");
                 return;
             }
 
-            await fetchDataFromSheets();
+            if (authBtn) authBtn.disabled = true;
+            await fetchDataFromSheets(true);
+            if (authBtn) authBtn.disabled = false;
+
+            const normalizedInputPhone = normalizeComparablePhone(phone);
 
             if (authMode === 'signin') {
-                const cust = state.customers.find(c => String(c.phone).trim() === phone);
+                const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
                 if (!cust) { showToast(state.lang === 'ar' ? "رقم الهاتف غير مسجل!" : "Phone not registered!", "fa-user-xmark"); return; }
                 if (String(cust.password).trim() !== password) { showToast(state.lang === 'ar' ? "كلمة المرور غير صحيحة!" : "Incorrect password!", "fa-lock"); return; }
                 if (String(cust.status || '').trim() !== 'مفعل' && String(cust.status || '').trim() !== 'Approved') {
@@ -1419,6 +1437,28 @@
                 if (!email.includes('@') || !email.toLowerCase().includes('.com')) { showToast(state.lang === 'ar' ? "يرجى إدخال بريد إلكتروني صحيح!" : "Invalid email!", "fa-envelope"); return; }
                 if (!address) { showToast(state.lang === 'ar' ? "يرجى إدخال العنوان التفصيلي!" : "Enter address!", "fa-location-dot"); return; }
 
+                const alreadyRegistered = state.customers.some(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
+                if (alreadyRegistered) {
+                    showToast(state.lang === 'ar' ? "هذا الرقم مسجل مسبقاً! يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد." : "Phone number is already registered. Please sign in.", "fa-circle-xmark", 4000);
+                    return;
+                }
+
+                if (authBtn) authBtn.disabled = true;
+                let regResData = null;
+                try {
+                    const regResponse = await fetch(state.settings.scriptUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'register', phone, name, email, address, password, status: 'قيد الانتظار' })
+                    });
+                    regResData = await regResponse.json();
+                } catch (e) { console.log(e); }
+                if (authBtn) authBtn.disabled = false;
+
+                if (regResData && regResData.status === 'duplicate_phone') {
+                    showToast(state.lang === 'ar' ? "هذا الرقم مسجل مسبقاً! يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد." : "Phone number is already registered. Please sign in.", "fa-circle-xmark", 4000);
+                    return;
+                }
+
                 state.user = { phone: phone, name: name, address: address };
                 localStorage.setItem('miro_user', JSON.stringify(state.user));
 
@@ -1433,13 +1473,6 @@
 
                 updateProfileUI();
                 tempRegistrationData = { phone, name, email, address, password };
-
-                try {
-                    await fetch(state.settings.scriptUrl, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'register', phone, name, email, address, password, status: 'قيد الانتظار' })
-                    });
-                } catch (e) { console.log(e); }
 
                 const waUrl = `https://wa.me/201002669119?text=${encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:\nالاسم: ${name}\nالبريد الإلكتروني: ${email}\nرقم الجوال: ${phone}`)}`;
                 document.getElementById('btnSendWhatsappMsg').href = waUrl;
@@ -1459,7 +1492,7 @@
 
             const checkPhone = state.user ? state.user.phone : (tempRegistrationData ? tempRegistrationData.phone : null);
             if (checkPhone) {
-                const cust = state.customers.find(c => String(c.phone).trim() === String(checkPhone).trim());
+                const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizeComparablePhone(checkPhone));
                 if (cust && (String(cust.status).trim() === 'مفعل' || String(cust.status).trim() === 'Approved')) {
                     closeLoginModal();
                     updateCartUI();
