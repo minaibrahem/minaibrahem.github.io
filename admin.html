@@ -43,63 +43,7 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="pb-24 text-gray-900 select-none overflow-hidden">
-
-    <!-- شاشة قفل الدخول بكلمة المرور والبصمة -->
-    <div id="admin-lock-screen" class="fixed inset-0 z-[10000] bg-[#131921] text-white flex items-center justify-center p-4">
-        <div class="w-full max-w-sm bg-[#1e2733] border border-gray-700 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
-            <div class="w-16 h-16 rounded-2xl bg-amber-400/15 border border-amber-400/40 text-amber-400 flex items-center justify-center mx-auto text-3xl shadow-inner">
-                <i class="fa-solid fa-shield-halved"></i>
-            </div>
-
-            <div>
-                <h2 class="font-black text-lg text-amber-400">قفل لوحة المشغل</h2>
-                <p class="text-xs text-gray-300 mt-1">أدخل كلمة المرور أو استخدم البصمة للوصول إلى Miro MarkEt</p>
-            </div>
-
-            <form id="pinLoginForm" onsubmit="handlePinLogin(event)" class="space-y-3 text-right">
-                <label class="block text-[11px] font-bold text-gray-300">كلمة المرور</label>
-                <div class="relative">
-                    <input
-                        type="password"
-                        id="adminPinInput"
-                        autocomplete="current-password"
-                        placeholder="أدخل كلمة المرور..."
-                        class="w-full bg-[#131921] text-white border border-gray-600 focus:border-amber-400 focus:outline-none rounded-xl px-4 py-3 pl-11 text-sm font-bold"
-                    >
-                    <button
-                        type="button"
-                        onclick="togglePinVisibility()"
-                        aria-label="إظهار أو إخفاء كلمة المرور"
-                        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-400 transition"
-                    >
-                        <i id="pinEyeIcon" class="fa-solid fa-eye"></i>
-                    </button>
-                </div>
-                <p id="lockErrorMsg" class="text-[11px] font-bold text-red-400 min-h-[16px]"></p>
-
-                <button
-                    type="submit"
-                    class="w-full bg-amber-400 hover:bg-amber-300 text-gray-950 font-black py-3 rounded-xl shadow-lg text-sm transition active:scale-95 flex items-center justify-center gap-2"
-                >
-                    <i class="fa-solid fa-right-to-bracket"></i> دخول بكلمة المرور
-                </button>
-            </form>
-
-            <!-- زر الدخول بالبصمة -->
-            <div id="biometricAuthSection" class="pt-2 border-t border-gray-700/80 space-y-2">
-                <button
-                    type="button"
-                    id="btnBiometricLogin"
-                    onclick="handleBiometricLogin()"
-                    class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 rounded-xl shadow-lg text-sm transition active:scale-95 flex items-center justify-center gap-2"
-                >
-                    <i class="fa-solid fa-fingerprint text-lg"></i> دخول بالبصمة
-                </button>
-                <p id="biometricHintText" class="text-[11px] text-gray-400 leading-relaxed"></p>
-            </div>
-        </div>
-    </div>
+<body class="pb-24 text-gray-900 select-none">
 
     <!-- Toast Notification -->
     <div id="adminToast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
@@ -126,9 +70,6 @@
                 </button>
                 <button onclick="fetchAdminData()" class="bg-[#232f3e] p-2.5 rounded-xl border border-gray-700 text-emerald-400 active:scale-95 transition">
                     <i id="refreshIcon" class="fa-solid fa-rotate"></i>
-                </button>
-                <button onclick="lockAdminPanel()" title="قفل اللوحة" class="bg-[#232f3e] p-2.5 rounded-xl border border-gray-700 text-amber-400 active:scale-95 transition">
-                    <i class="fa-solid fa-lock"></i>
                 </button>
             </div>
         </div>
@@ -181,7 +122,7 @@
             <div id="adminProductsList" class="space-y-2.5"></div>
         </section>
 
-        <!-- 4. صفحة التحكم في عمل الأوردرات والأمان -->
+        <!-- 4. صفحة التحكم في عمل الأوردرات -->
         <section id="page-control" class="admin-page hidden space-y-4">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center space-y-4">
                 <div id="storeControlIconBox" class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-3xl">
@@ -204,22 +145,6 @@
                 <p class="text-[11px] text-gray-400 bg-gray-50 p-2.5 rounded-xl border">
                     عند إيقاف الأوردرات، ستظهر للعميل رسالة: <strong class="text-red-600">"غير مسموح بعمل طلبات جديدة الان"</strong> ولن يتمكن من إرسال أي طلب.
                 </p>
-            </div>
-
-            <!-- إعدادات البصمة وقفل اللوحة -->
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-                <h3 class="font-extrabold text-sm text-gray-800 flex items-center gap-2">
-                    <i class="fa-solid fa-fingerprint text-emerald-600"></i> أمان الدخول (البصمة والقفل)
-                </h3>
-                <p id="controlBiometricStatus" class="text-xs text-gray-500"></p>
-                <div class="grid grid-cols-2 gap-2">
-                    <button type="button" onclick="enrollBiometricCredential()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-extrabold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-fingerprint"></i> تفعيل / تحديث البصمة
-                    </button>
-                    <button type="button" onclick="lockAdminPanel()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 font-extrabold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-lock"></i> قفل اللوحة الآن
-                    </button>
-                </div>
             </div>
         </section>
 
@@ -265,14 +190,6 @@
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwr6ZNydBbxhvmF4vmUVGGhv5AqhjguThzBV5j0N5xS-2ILwvNGFY5ojvJ74HBpk047/exec";
 
-        // غيّر كلمة المرور التالية إلى الكلمة التي تريدها للمشغل
-        const ADMIN_ACCESS_PIN = "mina1234";
-        const BIOMETRIC_CRED_KEY = "miro_admin_biometric_cred_id";
-        const SESSION_UNLOCK_KEY = "miro_admin_unlocked_session";
-
-        let isAdminAuthenticated = false;
-        let syncIntervalId = null;
-
         let adminState = {
             orders: [],
             customers: [],
@@ -287,212 +204,12 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             renderAdminNotifs();
-            updateBiometricUIState();
-
-            if (sessionStorage.getItem(SESSION_UNLOCK_KEY) === '1') {
-                unlockAdminPanel(false);
-            } else {
-                lockAdminPanel();
-            }
-        });
-
-        function togglePinVisibility() {
-            const input = document.getElementById('adminPinInput');
-            const icon = document.getElementById('pinEyeIcon');
-            if (!input || !icon) return;
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fa-solid fa-eye-slash';
-            } else {
-                input.type = 'password';
-                icon.className = 'fa-solid fa-eye';
-            }
-        }
-
-        function updateBiometricUIState() {
-            const hint = document.getElementById('biometricHintText');
-            const controlStatus = document.getElementById('controlBiometricStatus');
-            const hasCred = Boolean(localStorage.getItem(BIOMETRIC_CRED_KEY));
-            const supportsWebAuthn = Boolean(window.PublicKeyCredential && navigator.credentials);
-
-            if (!supportsWebAuthn) {
-                if (hint) hint.textContent = "المتصفح الحالي لا يدعم بصمة الويب؛ استخدم كلمة المرور للدخول.";
-                if (controlStatus) controlStatus.textContent = "بصمة الويب غير مدعومة على هذا المتصفح.";
-                return;
-            }
-
-            if (hasCred) {
-                if (hint) hint.textContent = "البصمة مفعّلة على هذا الجهاز؛ اضغط (دخول بالبصمة) للفتح السريع.";
-                if (controlStatus) controlStatus.textContent = "البصمة مفعّلة ومربوطة بهذا الجهاز.";
-            } else {
-                if (hint) hint.textContent = "سجّل دخولك بكلمة المرور أولاً ثم فعّل البصمة من صفحة التحكم.";
-                if (controlStatus) controlStatus.textContent = "البصمة غير مفعّلة بعد على هذا الجهاز.";
-            }
-        }
-
-        function base64UrlToUint8Array(base64Url) {
-            const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
-            const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-
-        function uint8ArrayToBase64Url(buffer) {
-            const bytes = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
-
-        async function enrollBiometricCredential() {
-            const errEl = document.getElementById('lockErrorMsg');
-            if (errEl) errEl.textContent = '';
-
-            if (!window.PublicKeyCredential || !navigator.credentials) {
-                showAdminToast("الجهاز أو المتصفح لا يدعم البصمة", "fa-circle-xmark");
-                return;
-            }
-
-            try {
-                const challenge = crypto.getRandomValues(new Uint8Array(32));
-                const userId = crypto.getRandomValues(new Uint8Array(16));
-                const rpId = window.location.hostname || 'localhost';
-
-                const credential = await navigator.credentials.create({
-                    publicKey: {
-                        challenge: challenge,
-                        rp: { name: "Miro MarkEt Admin", id: rpId },
-                        user: {
-                            id: userId,
-                            name: "admin_miro",
-                            displayName: "مشغل Miro MarkEt"
-                        },
-                        pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-                        authenticatorSelection: {
-                            authenticatorAttachment: "platform",
-                            userVerification: "required"
-                        },
-                        timeout: 60000
-                    }
-                });
-
-                if (credential && credential.rawId) {
-                    localStorage.setItem(BIOMETRIC_CRED_KEY, uint8ArrayToBase64Url(credential.rawId));
-                    updateBiometricUIState();
-                    showAdminToast("تم تفعيل البصمة بنجاح على هذا الجهاز", "fa-fingerprint");
-                }
-            } catch (e) {
-                console.error("Biometric enroll error:", e);
-                showAdminToast("تم إلغاء أو تعذر تسجيل البصمة", "fa-circle-xmark");
-            }
-        }
-
-        async function handleBiometricLogin() {
-            const errEl = document.getElementById('lockErrorMsg');
-            if (errEl) errEl.textContent = '';
-
-            const savedCredId = localStorage.getItem(BIOMETRIC_CRED_KEY);
-            if (!savedCredId) {
-                if (errEl) errEl.textContent = "فعّل البصمة أولاً بعد تسجيل الدخول بكلمة المرور.";
-                return;
-            }
-
-            if (!window.PublicKeyCredential || !navigator.credentials) {
-                if (errEl) errEl.textContent = "المتصفح لا يدعم التحقق بالبصمة.";
-                return;
-            }
-
-            try {
-                const challenge = crypto.getRandomValues(new Uint8Array(32));
-                const assertion = await navigator.credentials.get({
-                    publicKey: {
-                        challenge: challenge,
-                        allowCredentials: [{
-                            id: base64UrlToUint8Array(savedCredId),
-                            type: "public-key"
-                        }],
-                        userVerification: "required",
-                        timeout: 60000
-                    }
-                });
-
-                if (assertion) {
-                    unlockAdminPanel(true);
-                }
-            } catch (e) {
-                console.error("Biometric auth error:", e);
-                if (errEl) errEl.textContent = "فشل التحقق بالبصمة أو تم إلغاؤه.";
-            }
-        }
-
-        function handlePinLogin(event) {
-            if (event) event.preventDefault();
-            const input = document.getElementById('adminPinInput');
-            const errEl = document.getElementById('lockErrorMsg');
-            const entered = input ? input.value : '';
-
-            if (entered === ADMIN_ACCESS_PIN) {
-                if (input) input.value = '';
-                if (errEl) errEl.textContent = '';
-                unlockAdminPanel(true);
-            } else {
-                if (errEl) errEl.textContent = "كلمة المرور غير صحيحة، حاول مرة أخرى.";
-            }
-        }
-
-        function unlockAdminPanel(showWelcomeToast = true) {
-            isAdminAuthenticated = true;
-            sessionStorage.setItem(SESSION_UNLOCK_KEY, '1');
-            document.body.classList.remove('overflow-hidden');
-
-            const lockScreen = document.getElementById('admin-lock-screen');
-            if (lockScreen) lockScreen.classList.add('hidden');
-
             renderOrdersAdmin();
             fetchAdminData();
-
-            if (!syncIntervalId) {
-                syncIntervalId = setInterval(() => {
-                    if (isAdminAuthenticated) fetchAdminData(true);
-                }, 12000);
-            }
-
-            if (showWelcomeToast) {
-                showAdminToast("تم فتح لوحة المشغل بنجاح", "fa-shield-halved");
-            }
-        }
-
-        function lockAdminPanel() {
-            isAdminAuthenticated = false;
-            sessionStorage.removeItem(SESSION_UNLOCK_KEY);
-            document.body.classList.add('overflow-hidden');
-
-            if (syncIntervalId) {
-                clearInterval(syncIntervalId);
-                syncIntervalId = null;
-            }
-
-            const pinInput = document.getElementById('adminPinInput');
-            const errEl = document.getElementById('lockErrorMsg');
-            if (pinInput) pinInput.value = '';
-            if (errEl) errEl.textContent = '';
-
-            updateBiometricUIState();
-
-            const lockScreen = document.getElementById('admin-lock-screen');
-            if (lockScreen) lockScreen.classList.remove('hidden');
-        }
+            setInterval(() => fetchAdminData(true), 12000);
+        });
 
         async function postToScript(payloadObj) {
-            if (!isAdminAuthenticated) {
-                throw new Error("Unauthorized");
-            }
             const params = new URLSearchParams();
             params.append('payload', JSON.stringify(payloadObj));
             Object.keys(payloadObj).forEach(key => {
@@ -605,7 +322,6 @@
         }
 
         async function fetchAdminData(isSilent = false) {
-            if (!isAdminAuthenticated) return;
             const refreshIcon = document.getElementById('refreshIcon');
             if (!isSilent && refreshIcon) refreshIcon.classList.add('animate-spin');
 
@@ -851,6 +567,7 @@
             document.getElementById('statPendingCount').textContent = pendingCount;
             document.getElementById('statCancelCount').textContent = cancelCount;
 
+            // 1. طلبات اليوم فقط
             const todayOrders = enriched.filter(item => item._info.hasValidDate && item._info.dayStart === todayStart);
             let html = `
             <div class="space-y-2.5">
@@ -870,6 +587,7 @@
                 </div>
             </div>`;
 
+            // 2. الأيام السابقة التي بها طلبات فقط
             const pastGroupsMap = new Map();
             const unparsedOrders = [];
 
