@@ -20,7 +20,7 @@
             window.handleIncomingAdminNotification(
               title || "إشعار جديد",
               body || "",
-              { launchURL: launchURL || "", syncData: true, showToast: true }
+              { launchURL: launchURL || "", syncData: true, showToast: true, showNative: true }
             );
             return;
           }
@@ -423,17 +423,64 @@
             document.addEventListener('keydown', unlockHandler, { once: true });
         }
 
+        async function showNativeSystemNotification(title, body, tag = '') {
+            try {
+                if (!('Notification' in window)) return;
+
+                let perm = Notification.permission;
+                if (perm === 'default') {
+                    perm = await Notification.requestPermission();
+                }
+                if (perm !== 'granted') return;
+
+                const notifTitle = String(title || 'Miro MarkEt - المشغل').trim();
+                const notifOptions = {
+                    body: String(body || '').trim(),
+                    dir: 'rtl',
+                    lang: 'ar',
+                    tag: tag || ('miro-admin-' + Date.now()),
+                    renotify: true,
+                    requireInteraction: false,
+                    data: { url: window.location.href }
+                };
+
+                if ('serviceWorker' in navigator) {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg && typeof reg.showNotification === 'function') {
+                        await reg.showNotification(notifTitle, notifOptions);
+                        return;
+                    }
+                }
+
+                const n = new Notification(notifTitle, notifOptions);
+                n.onclick = function() {
+                    try {
+                        window.focus();
+                        n.close();
+                    } catch (e) {}
+                };
+            } catch (err) {
+                console.warn('Native notification note:', err);
+            }
+        }
+        window.showNativeSystemNotification = showNativeSystemNotification;
+
         function handleIncomingAdminNotification(title, body, options = {}) {
             const safeTitle = String(title || "إشعار جديد").trim();
             const safeBody = String(body || "").trim();
             const shouldSync = options.syncData !== false;
             const shouldToast = options.showToast !== false;
+            const shouldNative = options.showNative !== false;
 
             playNotificationAlert();
             addAdminNotif(safeTitle, safeBody);
 
             if (shouldToast) {
                 showAdminToast(safeBody ? `${safeTitle}: ${safeBody}` : safeTitle, 'fa-bell');
+            }
+
+            if (shouldNative) {
+                showNativeSystemNotification(safeTitle, safeBody, options.tag || '');
             }
 
             if (shouldSync && isAdminAuthenticated) {
@@ -450,7 +497,8 @@
                 handleIncomingAdminNotification(item.title, item.body, {
                     launchURL: item.launchURL,
                     syncData: true,
-                    showToast: true
+                    showToast: true,
+                    showNative: true
                 });
             });
         }
@@ -717,7 +765,7 @@
             window.__adminToastTimer = setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
-            }, 3500);
+            }, 6000);
         }
 
         function playNotificationAlert() {
@@ -821,17 +869,23 @@
                         if (!adminState.knownOrderIds.has(o.id)) {
                             adminState.knownOrderIds.add(o.id);
                             if (!isFirstLoad) {
+                                const orderTitle = "🛒 طلب شراء جديد";
+                                const orderBody = `العميل: ${o.name} | الإجمالي: ${o.total} ج.م (${o.id})`;
                                 playNotificationAlert();
-                                addAdminNotif("🛒 طلب شراء جديد", `العميل: ${o.name} | الإجمالي: ${o.total} ج.م (${o.id})`);
+                                addAdminNotif(orderTitle, orderBody);
                                 showAdminToast(`طلب شراء جديد من ${o.name}`, 'fa-cart-plus');
+                                showNativeSystemNotification(orderTitle, orderBody, `order-${o.id}`);
                             }
                         }
                         if (String(o.status).includes('طلب إلغاء') && !adminState.knownCancelIds.has(o.id)) {
                             adminState.knownCancelIds.add(o.id);
                             if (!isFirstLoad) {
+                                const cancelTitle = "⚠️ طلب إلغاء أوردر";
+                                const cancelBody = `العميل ${o.name} طلب إلغاء الأوردر ${o.id}`;
                                 playNotificationAlert();
-                                addAdminNotif("⚠️ طلب إلغاء أوردر", `العميل ${o.name} طلب إلغاء الأوردر ${o.id}`);
+                                addAdminNotif(cancelTitle, cancelBody);
                                 showAdminToast(`طلب إلغاء للأوردر ${o.id}`, 'fa-triangle-exclamation');
+                                showNativeSystemNotification(cancelTitle, cancelBody, `cancel-${o.id}`);
                             }
                         }
                     });
@@ -845,9 +899,12 @@
                         if (!adminState.knownCustomerPhones.has(c.phone)) {
                             adminState.knownCustomerPhones.add(c.phone);
                             if (!isFirstLoad) {
+                                const custTitle = "👤 طلب تسجيل عميل";
+                                const custBody = `الاسم: ${c.name} | الهاتف: ${c.phone}`;
                                 playNotificationAlert();
-                                addAdminNotif("👤 طلب تسجيل عميل", `الاسم: ${c.name} | الهاتف: ${c.phone}`);
+                                addAdminNotif(custTitle, custBody);
                                 showAdminToast(`طلب تسجيل عميل جديد: ${c.name}`, 'fa-user-plus');
+                                showNativeSystemNotification(custTitle, custBody, `cust-${c.phone}`);
                             }
                         }
                     });
