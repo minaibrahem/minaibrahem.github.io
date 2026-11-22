@@ -14,6 +14,26 @@
     <script>
       const ADMIN_ONESIGNAL_ID = "admin_miro";
 
+      function dispatchAdminPushEvent(title, body, launchURL) {
+        try {
+          if (typeof window.handleIncomingAdminNotification === "function") {
+            window.handleIncomingAdminNotification(
+              title || "إشعار جديد",
+              body || "",
+              { launchURL: launchURL || "", syncData: true, showToast: true }
+            );
+            return;
+          }
+        } catch (err) {}
+
+        window.__pendingAdminPushEvents = window.__pendingAdminPushEvents || [];
+        window.__pendingAdminPushEvents.push({
+          title: title || "إشعار جديد",
+          body: body || "",
+          launchURL: launchURL || ""
+        });
+      }
+
       async function bindAdminOneSignalUser(OneSignal) {
         try {
           var currentExternalId = OneSignal.User && OneSignal.User.externalId;
@@ -69,21 +89,33 @@
           OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
               var n = event && event.notification;
               if (n) {
-                  playNotificationAlert();
-                  addAdminNotif(n.title || "إشعار جديد", n.body || "");
-                  fetchAdminData(true);
+                  dispatchAdminPushEvent(
+                      n.title || "إشعار جديد",
+                      n.body || "",
+                      n.launchURL || ""
+                  );
               }
           });
 
           OneSignal.Notifications.addEventListener('click', function(event) {
               try {
+                  var n = event && event.notification;
+                  if (n) {
+                      dispatchAdminPushEvent(
+                          n.title || "إشعار جديد",
+                          n.body || "",
+                          n.launchURL || ""
+                      );
+                  }
                   if (event && typeof event.preventDefault === "function") {
                       event.preventDefault();
                   }
-                  var targetUrl = (event && event.notification && event.notification.launchURL)
-                      ? event.notification.launchURL
+                  var targetUrl = (n && n.launchURL)
+                      ? n.launchURL
                       : window.location.href;
-                  window.location.assign(targetUrl);
+                  if (targetUrl && targetUrl !== window.location.href) {
+                      window.location.assign(targetUrl);
+                  }
               } catch (clickErr) {}
           });
         } catch (e) { console.log("OneSignal Admin Error:", e); }
@@ -91,10 +123,21 @@
 
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.addEventListener("message", function(event) {
-          if (event.data && event.data.type === "NEW_NOTIFICATION_RECEIVED") {
-            playNotificationAlert();
-            addAdminNotif(event.data.title || "إشعار جديد", event.data.body || "");
-            fetchAdminData(true);
+          var data = event && event.data;
+          if (!data || typeof data !== "object") return;
+
+          if (data.type === "NEW_NOTIFICATION_RECEIVED") {
+            dispatchAdminPushEvent(
+              data.title || "إشعار جديد",
+              data.body || "",
+              data.launchURL || data.url || ""
+            );
+          } else if (data.notification && (data.notification.title || data.notification.body)) {
+            dispatchAdminPushEvent(
+              data.notification.title || "إشعار جديد",
+              data.notification.body || "",
+              data.notification.launchURL || ""
+            );
           }
         });
       }
@@ -164,7 +207,7 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="adminToast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
+    <div id="adminToast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[10001] transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4">
         <div class="bg-gray-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-amber-400 min-w-[290px]">
             <i id="toastIcon" class="fa-solid fa-bell text-amber-400 text-lg"></i>
             <span id="toastText" class="text-xs font-bold leading-relaxed"></span>
@@ -311,7 +354,7 @@
     </nav>
 
     <!-- Notification Modal -->
-    <div id="notifDrawer" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+    <div id="notifDrawer" class="fixed inset-0 bg-black/60 z-[10002] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl w-full max-w-md p-4 max-h-[80vh] flex flex-col space-y-3">
             <div class="flex justify-between items-center border-b pb-2">
                 <h3 class="font-bold text-sm"><i class="fa-solid fa-bell text-amber-500 ml-1"></i> سجل إشعارات المشغل</h3>
@@ -380,6 +423,53 @@
             document.addEventListener('keydown', unlockHandler, { once: true });
         }
 
+        function handleIncomingAdminNotification(title, body, options = {}) {
+            const safeTitle = String(title || "إشعار جديد").trim();
+            const safeBody = String(body || "").trim();
+            const shouldSync = options.syncData !== false;
+            const shouldToast = options.showToast !== false;
+
+            playNotificationAlert();
+            addAdminNotif(safeTitle, safeBody);
+
+            if (shouldToast) {
+                showAdminToast(safeBody ? `${safeTitle}: ${safeBody}` : safeTitle, 'fa-bell');
+            }
+
+            if (shouldSync && isAdminAuthenticated) {
+                fetchAdminData(true);
+            }
+        }
+        window.handleIncomingAdminNotification = handleIncomingAdminNotification;
+
+        function flushPendingAdminPushEvents() {
+            const pending = window.__pendingAdminPushEvents;
+            if (!Array.isArray(pending) || pending.length === 0) return;
+            const items = pending.splice(0, pending.length);
+            items.forEach(item => {
+                handleIncomingAdminNotification(item.title, item.body, {
+                    launchURL: item.launchURL,
+                    syncData: true,
+                    showToast: true
+                });
+            });
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                ensureAudioContext(true);
+                flushPendingAdminPushEvents();
+                if (isAdminAuthenticated) {
+                    fetchAdminData(true);
+                }
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            ensureAudioContext(true);
+            flushPendingAdminPushEvents();
+        });
+
         window.addEventListener('DOMContentLoaded', () => {
             bindUserGestureAudioUnlock();
             renderAdminNotifs();
@@ -390,6 +480,8 @@
             } else {
                 lockAdminPanel();
             }
+
+            flushPendingAdminPushEvents();
         });
 
         function togglePinVisibility() {
@@ -612,11 +704,17 @@
 
         function showAdminToast(msg, icon = 'fa-circle-check') {
             const toast = document.getElementById('adminToast');
-            document.getElementById('toastText').textContent = msg;
-            document.getElementById('toastIcon').className = `fa-solid ${icon} text-amber-400 text-lg`;
+            const textEl = document.getElementById('toastText');
+            const iconEl = document.getElementById('toastIcon');
+            if (!toast || !textEl || !iconEl) return;
+
+            textEl.textContent = msg;
+            iconEl.className = `fa-solid ${icon} text-amber-400 text-lg`;
             toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
             toast.classList.add('opacity-100', 'translate-y-0');
-            setTimeout(() => {
+
+            clearTimeout(window.__adminToastTimer);
+            window.__adminToastTimer = setTimeout(() => {
                 toast.classList.remove('opacity-100', 'translate-y-0');
                 toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
             }, 3500);
