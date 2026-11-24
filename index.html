@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="data:,">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
@@ -16,6 +17,78 @@
     
     <!-- إضافة مكتبة Tesseract.js لقراءة النصوص من صور الإيصالات (OCR) -->
     <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
+
+<script>
+  // منع أي reload غير مقصود عند دوران الجيروسكوب أو تغير أبعاد الشاشة
+  window.__allowExplicitReload = false;
+  (function guardGyroscopeReload() {
+    var nativeReload = window.location.reload.bind(window.location);
+    try {
+      window.location.reload = function() {
+        if (window.__allowExplicitReload) {
+          return nativeReload();
+        }
+        if (typeof fetchDataFromSheets === "function") {
+          fetchDataFromSheets(true);
+        }
+      };
+    } catch (e) {}
+
+    window.addEventListener("orientationchange", function() {
+      if (typeof updateCartUI === "function") updateCartUI();
+      if (typeof updateProfileUI === "function") updateProfileUI();
+    }, { passive: true });
+  })();
+
+  function normalizeComparablePhone(val) {
+    let digits = String(val || '')
+      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+      .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵٦٧٨٩'.indexOf(d))
+      .replace(/\D/g, '');
+    if (digits.startsWith('20') && digits.length >= 12) {
+      digits = digits.slice(2);
+    }
+    if (digits.length === 10 && digits.startsWith('1')) {
+      digits = '0' + digits;
+    }
+    return digits;
+  }
+
+  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+    try {
+      if (!OneSignal) return;
+      const cleanPhone = normalizeComparablePhone(rawPhone);
+      if (!cleanPhone) return;
+
+      const currentExtId = OneSignal.User && OneSignal.User.externalId;
+      if (currentExtId && currentExtId !== cleanPhone) {
+        await OneSignal.logout();
+      }
+      if (!OneSignal.User || OneSignal.User.externalId !== cleanPhone) {
+        await OneSignal.login(cleanPhone);
+      }
+      if (OneSignal.User && typeof OneSignal.User.addTag === "function") {
+        await OneSignal.User.addTag("user_phone", cleanPhone);
+      }
+    } catch (err) {
+      const msg = String((err && err.message) || err || "");
+      if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
+        try {
+          await OneSignal.logout();
+          const cleanPhone = normalizeComparablePhone(rawPhone);
+          if (cleanPhone) {
+            await OneSignal.login(cleanPhone);
+            if (OneSignal.User && typeof OneSignal.User.addTag === "function") {
+              await OneSignal.User.addTag("user_phone", cleanPhone);
+            }
+          }
+        } catch (retryErr) {
+          console.warn("OneSignal relogin retry note:", retryErr);
+        }
+      }
+    }
+  }
+</script>
 
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
@@ -45,9 +118,7 @@
         try {
           let uData = JSON.parse(savedUser);
           if (uData && uData.phone) {
-            let cleanPhone = String(uData.phone).trim();
-            await OneSignal.login(cleanPhone);
-            OneSignal.User.addTag("user_phone", cleanPhone);
+            await bindCustomerOneSignalUser(OneSignal, uData.phone);
           }
         } catch(e) {}
       }
@@ -67,7 +138,9 @@
           try {
               event.preventDefault();
               const targetUrl = (event.notification && event.notification.launchURL) ? event.notification.launchURL : window.location.href;
-              window.location.assign(targetUrl);
+              if (targetUrl && targetUrl !== window.location.href) {
+                  window.location.assign(targetUrl);
+              }
           } catch(e) {}
       });
 
@@ -443,20 +516,6 @@
     <script>
         const INSTAPAY_PHONE = "01002669119";
 
-        function normalizeComparablePhone(val) {
-            let digits = String(val || '')
-                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵٦٧٨٩'.indexOf(d))
-                .replace(/\D/g, '');
-            if (digits.startsWith('20') && digits.length >= 12) {
-                digits = digits.slice(2);
-            }
-            if (digits.length === 10 && digits.startsWith('1')) {
-                digits = '0' + digits;
-            }
-            return digits;
-        }
-
         function parseStoreOpenValue(val) {
             if (typeof val === 'undefined' || val === null) return true;
             if (val === false) return false;
@@ -782,11 +841,7 @@
             if (state.user && state.user.phone) {
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    try {
-                        let cleanPhone = String(state.user.phone).trim();
-                        await OneSignal.login(cleanPhone);
-                        OneSignal.User.addTag("user_phone", cleanPhone);
-                    } catch(e) {}
+                    await bindCustomerOneSignalUser(OneSignal, state.user.phone);
                 });
             }
         });
@@ -1418,11 +1473,7 @@
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    try {
-                        let cleanPhone = String(cust.phone).trim();
-                        await OneSignal.login(cleanPhone);
-                        OneSignal.User.addTag("user_phone", cleanPhone);
-                    } catch(e) {}
+                    await bindCustomerOneSignalUser(OneSignal, cust.phone);
                 });
 
                 updateProfileUI();
@@ -1464,11 +1515,7 @@
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
-                    try {
-                        let cleanPhone = String(phone).trim();
-                        await OneSignal.login(cleanPhone);
-                        OneSignal.User.addTag("user_phone", cleanPhone);
-                    } catch(e) {}
+                    await bindCustomerOneSignalUser(OneSignal, phone);
                 });
 
                 updateProfileUI();
