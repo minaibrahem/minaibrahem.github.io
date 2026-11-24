@@ -56,35 +56,30 @@
 
   async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
     try {
-      if (!OneSignal) return;
+      if (!OneSignal || !OneSignal.User) return;
       const cleanPhone = normalizeComparablePhone(rawPhone);
       if (!cleanPhone) return;
 
-      const currentExtId = OneSignal.User && OneSignal.User.externalId;
+      const currentExtId = OneSignal.User.externalId;
+      if (currentExtId === cleanPhone) {
+        return;
+      }
+
       if (currentExtId && currentExtId !== cleanPhone) {
         await OneSignal.logout();
       }
-      if (!OneSignal.User || OneSignal.User.externalId !== cleanPhone) {
-        await OneSignal.login(cleanPhone);
-      }
-      if (OneSignal.User && typeof OneSignal.User.addTag === "function") {
-        await OneSignal.User.addTag("user_phone", cleanPhone);
-      }
+
+      await OneSignal.login(cleanPhone);
     } catch (err) {
       const msg = String((err && err.message) || err || "");
       if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
         try {
           await OneSignal.logout();
           const cleanPhone = normalizeComparablePhone(rawPhone);
-          if (cleanPhone) {
+          if (cleanPhone && OneSignal.User.externalId !== cleanPhone) {
             await OneSignal.login(cleanPhone);
-            if (OneSignal.User && typeof OneSignal.User.addTag === "function") {
-              await OneSignal.User.addTag("user_phone", cleanPhone);
-            }
           }
-        } catch (retryErr) {
-          console.warn("OneSignal relogin retry note:", retryErr);
-        }
+        } catch (_) {}
       }
     }
   }
@@ -838,12 +833,7 @@
                 fetchDataFromSheets(true);
             });
 
-            if (state.user && state.user.phone) {
-                window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
-                    await bindCustomerOneSignalUser(OneSignal, state.user.phone);
-                });
-            }
+
         });
 
         function hideLoadingScreen() {
