@@ -86,7 +86,7 @@
     } catch (_) {}
   }
 
-  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
     return enqueueOneSignalTask(async () => {
       const cleanPhone = normalizeComparablePhone(rawPhone);
       if (!OneSignal || !OneSignal.User || !cleanPhone) return;
@@ -94,17 +94,12 @@
       await ensurePushOptedIn(OneSignal);
 
       const currentExtId = OneSignal.User.externalId;
-      if (currentExtId === cleanPhone || __lastBoundOneSignalPhone === cleanPhone) {
-        __lastBoundOneSignalPhone = cleanPhone;
+      if (currentExtId === cleanPhone && __lastBoundOneSignalPhone === cleanPhone) {
         return;
       }
 
       try {
-        if (typeof OneSignal.User.addAlias === "function") {
-          await OneSignal.User.addAlias("external_id", cleanPhone);
-        } else {
-          await OneSignal.login(cleanPhone);
-        }
+        await OneSignal.login(cleanPhone);
         __lastBoundOneSignalPhone = cleanPhone;
       } catch (err) {
         __lastBoundOneSignalPhone = cleanPhone;
