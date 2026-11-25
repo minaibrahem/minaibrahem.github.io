@@ -93,12 +93,15 @@
       const cleanPhone = normalizeComparablePhone(rawPhone);
       if (!OneSignal || !OneSignal.User || !cleanPhone) return;
 
-      await ensurePushOptedIn(OneSignal);
+      try {
+        const currentExternalId = OneSignal.User.externalId;
+        if (currentExternalId && String(currentExternalId).trim() !== cleanPhone) {
+          await OneSignal.logout();
+          await new Promise(resolve => setTimeout(resolve, 400));
+        }
+      } catch (_) {}
 
-      if (OneSignal.User.externalId === cleanPhone) {
-        __lastBoundOneSignalPhone = cleanPhone;
-        return;
-      }
+      await ensurePushOptedIn(OneSignal);
 
       try {
         await OneSignal.login(cleanPhone);
@@ -106,6 +109,8 @@
       } catch (err) {
         __lastBoundOneSignalPhone = cleanPhone;
       }
+
+      await ensurePushOptedIn(OneSignal);
     });
   }
 
@@ -849,7 +854,7 @@
             lang: localStorage.getItem('miro_lang') || 'ar',
             user: JSON.parse(localStorage.getItem('miro_user')) || null,
             settings: {
-                scriptUrl: "https://script.google.com/macros/s/AKfycbyUEtzNKaTRVLeDhDBvrPUdHEX48IAXEaGIpw6dtXhC8iHgb_tmyY_vrkT_7JPlu4Sm/exec",
+                scriptUrl: "https://script.google.com/macros/s/AKfycbwkngo3NbA-grpxsb04CXKIVl7Yj868a3_53ONBf2GupIdvKUqo3vbM6FMO4kv92wWd/exec",
                 deliveryFee: 11,
                 storeOpen: true
             },
@@ -889,13 +894,14 @@
         }
 
         function completeAutoLoginOnActivation(custData, fallbackRegData = null) {
-            const phone = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
+            const phoneRaw = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
+            const phone = normalizeComparablePhone(phoneRaw);
             const name = (custData && custData.name) ? String(custData.name).trim() : ((fallbackRegData && fallbackRegData.name) ? fallbackRegData.name : 'عميل ميرو');
             const address = (custData && custData.address) ? String(custData.address).trim() : ((fallbackRegData && fallbackRegData.address) ? fallbackRegData.address : '');
 
             if (!phone) return;
 
-            const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === normalizeComparablePhone(phone);
+            const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === phone;
 
             stopApprovalAutoCheck();
             state.user = { phone, name, address };
