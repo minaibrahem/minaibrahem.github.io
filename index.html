@@ -54,22 +54,34 @@
     return digits;
   }
 
-  let __onesignalBindTimer = null;
-  function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
     try {
       if (!OneSignal || !OneSignal.User) return;
       const cleanPhone = normalizeComparablePhone(rawPhone);
       if (!cleanPhone) return;
 
-      if (__onesignalBindTimer) clearTimeout(__onesignalBindTimer);
-      __onesignalBindTimer = setTimeout(async function() {
+      const currentExtId = OneSignal.User.externalId;
+      if (currentExtId === cleanPhone) {
+        return;
+      }
+
+      if (currentExtId && currentExtId !== cleanPhone) {
+        await OneSignal.logout();
+      }
+
+      await OneSignal.login(cleanPhone);
+    } catch (err) {
+      const msg = String((err && err.message) || err || "");
+      if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
         try {
-          if (!OneSignal.Notifications || !OneSignal.Notifications.permission) return;
-          if (OneSignal.User.externalId === cleanPhone) return;
-          await OneSignal.login(cleanPhone);
+          await OneSignal.logout();
+          const cleanPhone = normalizeComparablePhone(rawPhone);
+          if (cleanPhone && OneSignal.User.externalId !== cleanPhone) {
+            await OneSignal.login(cleanPhone);
+          }
         } catch (_) {}
-      }, 1500);
-    } catch (_) {}
+      }
+    }
   }
 </script>
 
@@ -91,9 +103,7 @@
       });
 
       try {
-        if (!OneSignal.Notifications.permission) {
-          await OneSignal.Slidedown.promptPush();
-        }
+        await OneSignal.Slidedown.promptPush();
       } catch(err) {
         console.log("Slidedown error:", err);
       }
@@ -103,7 +113,7 @@
         try {
           let uData = JSON.parse(savedUser);
           if (uData && uData.phone) {
-            bindCustomerOneSignalUser(OneSignal, uData.phone);
+            await bindCustomerOneSignalUser(OneSignal, uData.phone);
           }
         } catch(e) {}
       }
@@ -482,14 +492,14 @@
                     <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-3">
                         <i class="fa-brands fa-whatsapp text-emerald-600 text-4xl animate-bounce"></i>
                         <h4 class="font-bold text-gray-800 text-sm">طلب التفعيل قيد المراجعة</h4>
-                        <p class="text-xs text-gray-600 leading-relaxed">تم إرسال طلب التفعيل بنجاح. يتم فحص حالة التفعيل تلقائياً وسيتم تسجيل دخولك فور الموافقة، أو يمكنك إرسال رسالة التفعيل للإدارة عبر الواتساب.</p>
+                        <p class="text-xs text-gray-600 leading-relaxed">تم إرسال طلب التفعيل بنجاح. يرجى الضغط على الزر بالأسفل لإرسال رسالة التفعيل إلى إدارة المتجر عبر الواتساب لتأكيد رقمك.</p>
                         <a id="btnSendWhatsappMsg" href="#" target="_blank" class="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow text-xs transition">
                             <i class="fa-brands fa-whatsapp text-base"></i> إرسال طلب التفعيل عبر الواتساب
                         </a>
                     </div>
                     <div class="pt-2 space-y-2">
                         <button onclick="checkAdminApprovalStatus()" id="btnCheckApproval" class="w-full bg-amazon-navy text-amazon-yellow font-bold py-2.5 rounded-xl shadow hover:bg-amazon-lightNavy transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-rotate-right"></i> تحديث حالة التفعيل الآن
+                            <i class="fa-solid fa-rotate-right"></i> تحديث حالة التفعيل
                         </button>
                         <p id="approvalStatusMsg" class="text-[11px] font-bold text-gray-500"></p>
                     </div>
@@ -777,7 +787,7 @@
             lang: localStorage.getItem('miro_lang') || 'ar',
             user: JSON.parse(localStorage.getItem('miro_user')) || null,
             settings: {
-                scriptUrl: "https://script.google.com/macros/s/AKfycbwr6ZNydBbxhvmF4vmUVGGhv5AqhjguThzBV5j0N5xS-2ILwvNGFY5ojvJ74HBpk047/exec",
+                scriptUrl: "https://script.google.com/macros/s/AKfycbyUEtzNKaTRVLeDhDBvrPUdHEX48IAXEaGIpw6dtXhC8iHgb_tmyY_vrkT_7JPlu4Sm/exec",
                 deliveryFee: 11,
                 storeOpen: true
             },
@@ -788,61 +798,6 @@
         };
 
         let tempRegistrationData = null;
-        let autoApprovalPollInterval = null;
-        let isApprovalChecking = false;
-
-        function isApprovedStatus(statusVal) {
-            const s = String(statusVal || '').trim().toLowerCase();
-            return s === 'مفعل' || s === 'approved' || s === 'active';
-        }
-
-        function completeSignInWithCustomer(custData, fallbackData = null) {
-            const merged = {
-                phone: (custData && custData.phone) || (fallbackData && fallbackData.phone) || '',
-                name: (custData && custData.name) || (fallbackData && fallbackData.name) || 'عميل ميرو',
-                address: (custData && custData.address) || (fallbackData && fallbackData.address) || ''
-            };
-            if (!merged.phone) return false;
-
-            stopAutoApprovalPolling();
-            tempRegistrationData = null;
-            state.user = merged;
-            localStorage.setItem('miro_user', JSON.stringify(state.user));
-
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(function(OneSignal) {
-                bindCustomerOneSignalUser(OneSignal, merged.phone);
-            });
-
-            updateProfileUI();
-            closeLoginModal();
-            updateCartUI();
-            updateOrdersHistoryUI();
-            return true;
-        }
-
-        function startAutoApprovalPolling() {
-            stopAutoApprovalPolling();
-            autoApprovalPollInterval = setInterval(async () => {
-                if (!tempRegistrationData || !tempRegistrationData.phone) {
-                    stopAutoApprovalPolling();
-                    return;
-                }
-                const step2 = document.getElementById('authFieldsStep2');
-                const modal = document.getElementById('loginModal');
-                if (!step2 || step2.classList.contains('hidden') || !modal || modal.classList.contains('hidden')) {
-                    return;
-                }
-                await checkAdminApprovalStatus(true);
-            }, 4000);
-        }
-
-        function stopAutoApprovalPolling() {
-            if (autoApprovalPollInterval) {
-                clearInterval(autoApprovalPollInterval);
-                autoApprovalPollInterval = null;
-            }
-        }
 
         window.addEventListener('DOMContentLoaded', () => {
             applyLanguageUI();
@@ -872,17 +827,13 @@
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') {
                     fetchDataFromSheets(true);
-                    if (tempRegistrationData && tempRegistrationData.phone) {
-                        checkAdminApprovalStatus(true);
-                    }
                 }
             });
             window.addEventListener('focus', () => {
                 fetchDataFromSheets(true);
-                if (tempRegistrationData && tempRegistrationData.phone) {
-                    checkAdminApprovalStatus(true);
-                }
             });
+
+
         });
 
         function hideLoadingScreen() {
@@ -954,21 +905,12 @@
                     const data = await response.json();
                     if (data.customers && Array.isArray(data.customers)) {
                         state.customers = data.customers;
-
-                        if (tempRegistrationData && tempRegistrationData.phone) {
-                            const pendingPhone = normalizeComparablePhone(tempRegistrationData.phone);
-                            const pendingCust = state.customers.find(c => normalizeComparablePhone(c.phone) === pendingPhone);
-                            if (pendingCust && isApprovedStatus(pendingCust.status)) {
-                                completeSignInWithCustomer(pendingCust, tempRegistrationData);
-                                showToast(state.lang === 'ar' ? "تم تفعيل حسابك وتسجيل الدخول تلقائياً!" : "Account approved and signed in automatically!", "fa-circle-check");
-                            }
-                        }
-
                         if (state.user && state.user.phone) {
                             const loggedPhone = normalizeComparablePhone(state.user.phone);
                             const currentCustData = state.customers.find(c => normalizeComparablePhone(c.phone) === loggedPhone);
                             if (currentCustData) {
-                                if (!isApprovedStatus(currentCustData.status)) {
+                                const statusStr = currentCustData.status ? String(currentCustData.status).trim() : 'قيد الانتظار';
+                                if (statusStr !== 'مفعل' && statusStr !== 'Approved') {
                                     handleSignOut();
                                     showToast(state.lang === 'ar' ? "تم تسجيل الخروج: حسابك قيد المراجعة أو تم إيقافه من الإدارة" : "Signed out: Account pending or deactivated", "fa-triangle-exclamation");
                                 } else {
@@ -1452,7 +1394,6 @@
         let authMode = 'signin';
         function openLoginModal(mode = 'signin') { setAuthMode(mode); document.getElementById('loginModal').classList.remove('hidden'); }
         function closeLoginModal() {
-            stopAutoApprovalPolling();
             document.getElementById('loginModal').classList.add('hidden');
             document.getElementById('authFieldsStep1').classList.remove('hidden');
             document.getElementById('authFieldsStep2').classList.add('hidden');
@@ -1460,7 +1401,6 @@
 
         function setAuthMode(mode) {
             authMode = mode;
-            stopAutoApprovalPolling();
             const tabIn = document.getElementById('modalTabSignIn');
             const tabUp = document.getElementById('modalTabSignUp');
             const signupFields = document.getElementById('signupOnlyFields');
@@ -1513,12 +1453,22 @@
                 const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
                 if (!cust) { showToast(state.lang === 'ar' ? "رقم الهاتف غير مسجل!" : "Phone not registered!", "fa-user-xmark"); return; }
                 if (String(cust.password).trim() !== password) { showToast(state.lang === 'ar' ? "كلمة المرور غير صحيحة!" : "Incorrect password!", "fa-lock"); return; }
-                if (!isApprovedStatus(cust.status)) {
+                if (String(cust.status || '').trim() !== 'مفعل' && String(cust.status || '').trim() !== 'Approved') {
                     showToast(state.lang === 'ar' ? "حسابك ما زال قيد المراجعة والتفعيل من الإدارة." : "Account pending approval.", "fa-clock");
                     return;
                 }
 
-                completeSignInWithCustomer(cust);
+                state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
+                localStorage.setItem('miro_user', JSON.stringify(state.user));
+
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    await bindCustomerOneSignalUser(OneSignal, cust.phone);
+                });
+
+                updateProfileUI();
+                closeLoginModal();
+                updateCartUI();
                 showToast(state.lang === 'ar' ? "تم تسجيل الدخول بنجاح!" : "Signed in successfully!", "fa-circle-check");
                 fetchDataFromSheets();
             } else {
@@ -1528,13 +1478,8 @@
                 if (!email.includes('@') || !email.toLowerCase().includes('.com')) { showToast(state.lang === 'ar' ? "يرجى إدخال بريد إلكتروني صحيح!" : "Invalid email!", "fa-envelope"); return; }
                 if (!address) { showToast(state.lang === 'ar' ? "يرجى إدخال العنوان التفصيلي!" : "Enter address!", "fa-location-dot"); return; }
 
-                const alreadyRegistered = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
+                const alreadyRegistered = state.customers.some(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
                 if (alreadyRegistered) {
-                    if (isApprovedStatus(alreadyRegistered.status) && String(alreadyRegistered.password).trim() === password) {
-                        completeSignInWithCustomer(alreadyRegistered);
-                        showToast(state.lang === 'ar' ? "حسابك مفعل بالفعل، تم تسجيل الدخول تلقائياً!" : "Account already active, signed in automatically!", "fa-circle-check");
-                        return;
-                    }
                     showToast(state.lang === 'ar' ? "هذا الرقم مسجل مسبقاً! يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد." : "Phone number is already registered. Please sign in.", "fa-circle-xmark", 4000);
                     return;
                 }
@@ -1555,53 +1500,48 @@
                     return;
                 }
 
+                state.user = { phone: phone, name: name, address: address };
+                localStorage.setItem('miro_user', JSON.stringify(state.user));
+
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                OneSignalDeferred.push(async function(OneSignal) {
+                    await bindCustomerOneSignalUser(OneSignal, phone);
+                });
+
+                updateProfileUI();
                 tempRegistrationData = { phone, name, email, address, password };
 
                 const waUrl = `https://wa.me/201002669119?text=${encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:\nالاسم: ${name}\nالبريد الإلكتروني: ${email}\nرقم الجوال: ${phone}`)}`;
                 document.getElementById('btnSendWhatsappMsg').href = waUrl;
                 document.getElementById('authFieldsStep1').classList.add('hidden');
                 document.getElementById('authFieldsStep2').classList.remove('hidden');
-                document.getElementById('approvalStatusMsg').textContent = state.lang === 'ar' ? "جاري المتابعة التلقائية لحالة التفعيل..." : "Auto-checking approval status...";
-
-                startAutoApprovalPolling();
+                document.getElementById('approvalStatusMsg').textContent = "";
             }
         }
 
-        async function checkAdminApprovalStatus(isSilentAutoCheck = false) {
-            if (isApprovalChecking) return;
-            isApprovalChecking = true;
-
+        async function checkAdminApprovalStatus() {
             const statusMsg = document.getElementById('approvalStatusMsg');
             const btn = document.getElementById('btnCheckApproval');
-            if (!isSilentAutoCheck) {
-                if (statusMsg) statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking...";
-                if (btn) btn.disabled = true;
-            }
+            statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking...";
+            btn.disabled = true;
 
-            try {
-                await fetchDataFromSheets(true);
+            await fetchDataFromSheets();
 
-                const checkPhone = state.user ? state.user.phone : (tempRegistrationData ? tempRegistrationData.phone : null);
-                if (checkPhone) {
-                    const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizeComparablePhone(checkPhone));
-                    if (cust && isApprovedStatus(cust.status)) {
-                        completeSignInWithCustomer(cust, tempRegistrationData);
-                        showToast(state.lang === 'ar' ? "تهانينا! تم تفعيل حسابك وتسجيل الدخول تلقائياً." : "Account approved and signed in!", "fa-circle-check");
-                        return;
-                    }
+            const checkPhone = state.user ? state.user.phone : (tempRegistrationData ? tempRegistrationData.phone : null);
+            if (checkPhone) {
+                const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizeComparablePhone(checkPhone));
+                if (cust && (String(cust.status).trim() === 'مفعل' || String(cust.status).trim() === 'Approved')) {
+                    closeLoginModal();
+                    updateCartUI();
+                    showToast(state.lang === 'ar' ? "تهانينا! تم تفعيل حسابك بنجاح." : "Account approved!", "fa-party-horn");
+                    return;
                 }
-                if (statusMsg && !isSilentAutoCheck) {
-                    statusMsg.textContent = state.lang === 'ar' ? "الحساب ما زال قيد الانتظار. يتم التحديث تلقائياً فور التفعيل." : "Account still pending. Auto-updating when approved.";
-                }
-            } finally {
-                isApprovalChecking = false;
-                if (btn && !isSilentAutoCheck) btn.disabled = false;
             }
+            statusMsg.textContent = state.lang === 'ar' ? "الحساب ما زال قيد الانتظار. يرجى إرسال رسالة الواتساب للإدارة." : "Account still pending.";
+            btn.disabled = false;
         }
 
         function handleSignOut() {
-            stopAutoApprovalPolling();
-            tempRegistrationData = null;
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
                 try {
