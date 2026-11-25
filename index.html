@@ -87,7 +87,11 @@
       }
 
       try {
-        await OneSignal.login(cleanPhone);
+        if (typeof OneSignal.User.addAlias === "function") {
+          await OneSignal.User.addAlias("external_id", cleanPhone);
+        } else {
+          await OneSignal.login(cleanPhone);
+        }
         __lastBoundOneSignalPhone = cleanPhone;
       } catch (err) {
         __lastBoundOneSignalPhone = cleanPhone;
@@ -832,10 +836,10 @@
         let tempRegistrationData = null;
 
         function isCustomerApproved(cust) {
-            if (!cust) return false;
-            const statusStr = cust.status ? String(cust.status).trim() : '';
-            return statusStr === 'مفعل' || statusStr === 'Approved';
-        }
+      if (!cust) return false;
+      const statusStr = cust.status ? String(cust.status).trim().toLowerCase() : '';
+      return statusStr === 'مفعل' || statusStr === 'مفعّل' || statusStr === 'approved' || statusStr === 'active';
+  }
 
         function completeAutoLoginOnActivation(custData, fallbackRegData = null) {
             const phone = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
