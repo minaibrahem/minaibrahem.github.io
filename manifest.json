@@ -2,6 +2,7 @@
   "name": "Miro MarkEt",
   "short_name": "Miro MarkEt",
   "start_url": "./index.html",
+  "orientation": "portrait"
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#131921",
