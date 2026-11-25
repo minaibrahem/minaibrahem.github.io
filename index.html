@@ -54,34 +54,70 @@
     return digits;
   }
 
-  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+  let __oneSignalQueue = Promise.resolve();
+  function enqueueOneSignalTask(taskFn) {
+    __oneSignalQueue = __oneSignalQueue
+      .then(() => taskFn())
+      .catch(() => {});
+    return __oneSignalQueue;
+  }
+
+  async function ensurePushOptedIn(OneSignal) {
     try {
-      if (!OneSignal || !OneSignal.User) return;
+      if (!OneSignal || !OneSignal.User || !OneSignal.User.PushSubscription) return;
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !OneSignal.User.PushSubscription.optedIn) {
+        await OneSignal.User.PushSubscription.optIn();
+      }
+    } catch (_) {}
+  }
+
+  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+    return enqueueOneSignalTask(async () => {
       const cleanPhone = normalizeComparablePhone(rawPhone);
-      if (!cleanPhone) return;
+      if (!OneSignal || !OneSignal.User || !cleanPhone) return;
+
+      await ensurePushOptedIn(OneSignal);
 
       const currentExtId = OneSignal.User.externalId;
       if (currentExtId === cleanPhone) {
         return;
       }
 
-      if (currentExtId && currentExtId !== cleanPhone) {
-        await OneSignal.logout();
-      }
-
-      await OneSignal.login(cleanPhone);
-    } catch (err) {
-      const msg = String((err && err.message) || err || "");
-      if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
-        try {
+      try {
+        if (currentExtId && currentExtId !== cleanPhone) {
           await OneSignal.logout();
-          const cleanPhone = normalizeComparablePhone(rawPhone);
-          if (cleanPhone && OneSignal.User.externalId !== cleanPhone) {
-            await OneSignal.login(cleanPhone);
-          }
-        } catch (_) {}
+        }
+        if (OneSignal.User.externalId !== cleanPhone) {
+          await OneSignal.login(cleanPhone);
+        }
+      } catch (err) {
+        const msg = String((err && err.message) || err || "");
+        if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
+          try {
+            await OneSignal.logout();
+            if (OneSignal.User.externalId !== cleanPhone) {
+              await OneSignal.login(cleanPhone);
+            }
+          } catch (_) {}
+        }
       }
-    }
+    });
+  }
+
+  function logoutOneSignalUser() {
+    return enqueueOneSignalTask(async () => {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      await new Promise((resolve) => {
+        OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            if (OneSignal && OneSignal.User && OneSignal.User.externalId) {
+              await OneSignal.logout();
+            }
+          } catch (_) {}
+          resolve();
+        });
+      });
+    });
   }
 </script>
 
@@ -102,8 +138,12 @@
         allowLocalhostAsSecureOrigin: true
       });
 
+      await ensurePushOptedIn(OneSignal);
+
       try {
-        await OneSignal.Slidedown.promptPush();
+        if (typeof Notification === "undefined" || Notification.permission === "default") {
+          await OneSignal.Slidedown.promptPush();
+        }
       } catch(err) {
         console.log("Slidedown error:", err);
       }
@@ -832,8 +872,6 @@
             window.addEventListener('focus', () => {
                 fetchDataFromSheets(true);
             });
-
-
         });
 
         function hideLoadingScreen() {
@@ -918,6 +956,10 @@
                                     state.user.address = currentCustData.address || state.user.address;
                                     localStorage.setItem('miro_user', JSON.stringify(state.user));
                                     updateProfileUI();
+                                    window.OneSignalDeferred = window.OneSignalDeferred || [];
+                                    OneSignalDeferred.push(async function(OneSignal) {
+                                        await bindCustomerOneSignalUser(OneSignal, state.user.phone);
+                                    });
                                 }
                             }
                         }
@@ -1542,12 +1584,7 @@
         }
 
         function handleSignOut() {
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {
-                try {
-                    await OneSignal.logout();
-                } catch(e) {}
-            });
+            logoutOneSignalUser();
             state.user = null;
             localStorage.removeItem('miro_orders');
             localStorage.removeItem('miro_user');
