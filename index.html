@@ -55,6 +55,8 @@
   }
 
   let __oneSignalQueue = Promise.resolve();
+  let __lastBoundOneSignalPhone = null;
+
   function enqueueOneSignalTask(taskFn) {
     __oneSignalQueue = __oneSignalQueue
       .then(() => taskFn())
@@ -79,32 +81,22 @@
       await ensurePushOptedIn(OneSignal);
 
       const currentExtId = OneSignal.User.externalId;
-      if (currentExtId === cleanPhone) {
+      if (currentExtId === cleanPhone || __lastBoundOneSignalPhone === cleanPhone) {
+        __lastBoundOneSignalPhone = cleanPhone;
         return;
       }
 
       try {
-        if (currentExtId && currentExtId !== cleanPhone) {
-          await OneSignal.logout();
-        }
-        if (OneSignal.User.externalId !== cleanPhone) {
-          await OneSignal.login(cleanPhone);
-        }
+        await OneSignal.login(cleanPhone);
+        __lastBoundOneSignalPhone = cleanPhone;
       } catch (err) {
-        const msg = String((err && err.message) || err || "");
-        if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
-          try {
-            await OneSignal.logout();
-            if (OneSignal.User.externalId !== cleanPhone) {
-              await OneSignal.login(cleanPhone);
-            }
-          } catch (_) {}
-        }
+        __lastBoundOneSignalPhone = cleanPhone;
       }
     });
   }
 
   function logoutOneSignalUser() {
+    __lastBoundOneSignalPhone = null;
     return enqueueOneSignalTask(async () => {
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       await new Promise((resolve) => {
@@ -839,6 +831,50 @@
 
         let tempRegistrationData = null;
 
+        function isCustomerApproved(cust) {
+            if (!cust) return false;
+            const statusStr = cust.status ? String(cust.status).trim() : '';
+            return statusStr === 'مفعل' || statusStr === 'Approved';
+        }
+
+        function completeAutoLoginOnActivation(custData, fallbackRegData = null) {
+            const phone = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
+            const name = (custData && custData.name) ? String(custData.name).trim() : ((fallbackRegData && fallbackRegData.name) ? fallbackRegData.name : 'عميل ميرو');
+            const address = (custData && custData.address) ? String(custData.address).trim() : ((fallbackRegData && fallbackRegData.address) ? fallbackRegData.address : '');
+
+            if (!phone) return;
+
+            const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === normalizeComparablePhone(phone);
+
+            state.user = { phone, name, address };
+            localStorage.setItem('miro_user', JSON.stringify(state.user));
+            tempRegistrationData = null;
+
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {
+                await bindCustomerOneSignalUser(OneSignal, phone);
+            });
+
+            updateProfileUI();
+            updateCartUI();
+
+            if (!wasAlreadyLoggedInSameUser) {
+                const notifTitle = state.lang === 'ar' ? "تم تفعيل حسابك وتسجيل الدخول 🎉" : "Account Activated & Signed In 🎉";
+                const notifBody = state.lang === 'ar'
+                    ? `أهلاً بك يا ${name}، تم تفعيل حسابك بنجاح وتم تسجيل دخولك تلقائياً.`
+                    : `Welcome ${name}, your account has been activated and you are now signed in automatically.`;
+
+                addNotificationToCenter(notifTitle, notifBody);
+                showToast(
+                    state.lang === 'ar'
+                        ? "تم تفعيل حسابك وتسجيل الدخول تلقائياً!"
+                        : "Account activated and signed in automatically!",
+                    "fa-circle-check",
+                    3500
+                );
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             applyLanguageUI();
             renderProducts(state.products);
@@ -943,23 +979,27 @@
                     const data = await response.json();
                     if (data.customers && Array.isArray(data.customers)) {
                         state.customers = data.customers;
-                        if (state.user && state.user.phone) {
-                            const loggedPhone = normalizeComparablePhone(state.user.phone);
-                            const currentCustData = state.customers.find(c => normalizeComparablePhone(c.phone) === loggedPhone);
-                            if (currentCustData) {
-                                const statusStr = currentCustData.status ? String(currentCustData.status).trim() : 'قيد الانتظار';
-                                if (statusStr !== 'مفعل' && statusStr !== 'Approved') {
-                                    handleSignOut();
-                                    showToast(state.lang === 'ar' ? "تم تسجيل الخروج: حسابك قيد المراجعة أو تم إيقافه من الإدارة" : "Signed out: Account pending or deactivated", "fa-triangle-exclamation");
+
+                        const pendingPhoneRaw = (state.user && state.user.phone)
+                            ? state.user.phone
+                            : (tempRegistrationData && tempRegistrationData.phone ? tempRegistrationData.phone : null);
+
+                        if (pendingPhoneRaw) {
+                            const targetPhone = normalizeComparablePhone(pendingPhoneRaw);
+                            const matchedCust = state.customers.find(c => normalizeComparablePhone(c.phone) === targetPhone);
+                            if (matchedCust) {
+                                if (!isCustomerApproved(matchedCust)) {
+                                    if (state.user) {
+                                        handleSignOut();
+                                        showToast(state.lang === 'ar' ? "تم تسجيل الخروج: حسابك قيد المراجعة أو تم إيقافه من الإدارة" : "Signed out: Account pending or deactivated", "fa-triangle-exclamation");
+                                    }
                                 } else {
-                                    state.user.name = currentCustData.name || state.user.name;
-                                    state.user.address = currentCustData.address || state.user.address;
-                                    localStorage.setItem('miro_user', JSON.stringify(state.user));
-                                    updateProfileUI();
-                                    window.OneSignalDeferred = window.OneSignalDeferred || [];
-                                    OneSignalDeferred.push(async function(OneSignal) {
-                                        await bindCustomerOneSignalUser(OneSignal, state.user.phone);
-                                    });
+                                    const modalEl = document.getElementById('loginModal');
+                                    const wasPendingActivation = !state.user || Boolean(tempRegistrationData);
+                                    completeAutoLoginOnActivation(matchedCust, tempRegistrationData);
+                                    if (wasPendingActivation && modalEl && !modalEl.classList.contains('hidden')) {
+                                        closeLoginModal();
+                                    }
                                 }
                             }
                         }
@@ -1495,23 +1535,13 @@
                 const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
                 if (!cust) { showToast(state.lang === 'ar' ? "رقم الهاتف غير مسجل!" : "Phone not registered!", "fa-user-xmark"); return; }
                 if (String(cust.password).trim() !== password) { showToast(state.lang === 'ar' ? "كلمة المرور غير صحيحة!" : "Incorrect password!", "fa-lock"); return; }
-                if (String(cust.status || '').trim() !== 'مفعل' && String(cust.status || '').trim() !== 'Approved') {
+                if (!isCustomerApproved(cust)) {
                     showToast(state.lang === 'ar' ? "حسابك ما زال قيد المراجعة والتفعيل من الإدارة." : "Account pending approval.", "fa-clock");
                     return;
                 }
 
-                state.user = { phone: cust.phone, name: cust.name || 'عميل ميرو', address: cust.address || '' };
-                localStorage.setItem('miro_user', JSON.stringify(state.user));
-
-                window.OneSignalDeferred = window.OneSignalDeferred || [];
-                OneSignalDeferred.push(async function(OneSignal) {
-                    await bindCustomerOneSignalUser(OneSignal, cust.phone);
-                });
-
-                updateProfileUI();
+                completeAutoLoginOnActivation(cust);
                 closeLoginModal();
-                updateCartUI();
-                showToast(state.lang === 'ar' ? "تم تسجيل الدخول بنجاح!" : "Signed in successfully!", "fa-circle-check");
                 fetchDataFromSheets();
             } else {
                 if (!/^0\d{10,}$/.test(phone)) { showToast(state.lang === 'ar' ? "رقم الهاتف يجب أن يبدأ بـ 0 ولا يقل عن 11 رقم!" : "Invalid phone format!", "fa-phone"); return; }
@@ -1522,6 +1552,13 @@
 
                 const alreadyRegistered = state.customers.some(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
                 if (alreadyRegistered) {
+                    const existingCust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizedInputPhone);
+                    if (existingCust && isCustomerApproved(existingCust) && String(existingCust.password).trim() === password) {
+                        completeAutoLoginOnActivation(existingCust, { phone, name, email, address, password });
+                        closeLoginModal();
+                        fetchDataFromSheets();
+                        return;
+                    }
                     showToast(state.lang === 'ar' ? "هذا الرقم مسجل مسبقاً! يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد." : "Phone number is already registered. Please sign in.", "fa-circle-xmark", 4000);
                     return;
                 }
@@ -1542,16 +1579,12 @@
                     return;
                 }
 
-                state.user = { phone: phone, name: name, address: address };
-                localStorage.setItem('miro_user', JSON.stringify(state.user));
+                tempRegistrationData = { phone, name, email, address, password };
 
                 window.OneSignalDeferred = window.OneSignalDeferred || [];
                 OneSignalDeferred.push(async function(OneSignal) {
                     await bindCustomerOneSignalUser(OneSignal, phone);
                 });
-
-                updateProfileUI();
-                tempRegistrationData = { phone, name, email, address, password };
 
                 const waUrl = `https://wa.me/201002669119?text=${encodeURIComponent(`مرحباً ميرو ماركت، طلب تفعيل حساب جديد:\nالاسم: ${name}\nالبريد الإلكتروني: ${email}\nرقم الجوال: ${phone}`)}`;
                 document.getElementById('btnSendWhatsappMsg').href = waUrl;
@@ -1567,15 +1600,15 @@
             statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking...";
             btn.disabled = true;
 
-            await fetchDataFromSheets();
+            await fetchDataFromSheets(true);
 
             const checkPhone = state.user ? state.user.phone : (tempRegistrationData ? tempRegistrationData.phone : null);
             if (checkPhone) {
                 const cust = state.customers.find(c => normalizeComparablePhone(c.phone) === normalizeComparablePhone(checkPhone));
-                if (cust && (String(cust.status).trim() === 'مفعل' || String(cust.status).trim() === 'Approved')) {
+                if (cust && isCustomerApproved(cust)) {
+                    completeAutoLoginOnActivation(cust, tempRegistrationData);
                     closeLoginModal();
-                    updateCartUI();
-                    showToast(state.lang === 'ar' ? "تهانينا! تم تفعيل حسابك بنجاح." : "Account approved!", "fa-party-horn");
+                    btn.disabled = false;
                     return;
                 }
             }
@@ -1585,6 +1618,7 @@
 
         function handleSignOut() {
             logoutOneSignalUser();
+            tempRegistrationData = null;
             state.user = null;
             localStorage.removeItem('miro_orders');
             localStorage.removeItem('miro_user');
