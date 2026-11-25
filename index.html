@@ -9,6 +9,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Miro MarkEt">
+    <meta name="screen-orientation" content="portrait">
+    <meta name="x5-orientation" content="portrait">
     
     <title>Miro MarkEt | ميرو ماركت</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,9 +21,15 @@
     <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
 
 <script>
-  // منع أي reload غير مقصود عند دوران الجيروسكوب أو تغير أبعاد الشاشة
+  // منع أي reload غير مقصود وإلغاء دوران التطبيق مع الجيروسكوب
   window.__allowExplicitReload = false;
-  (function guardGyroscopeReload() {
+  (function lockPortraitAndGuardGyroscope() {
+    try {
+      if (screen && screen.orientation && typeof screen.orientation.lock === 'function') {
+        screen.orientation.lock('portrait').catch(function() {});
+      }
+    } catch (_) {}
+
     var nativeReload = window.location.reload.bind(window.location);
     try {
       window.location.reload = function() {
@@ -34,10 +42,15 @@
       };
     } catch (e) {}
 
-    window.addEventListener("orientationchange", function() {
-      if (typeof updateCartUI === "function") updateCartUI();
-      if (typeof updateProfileUI === "function") updateProfileUI();
-    }, { passive: true });
+    var blockGyroEvent = function(e) {
+      if (e && typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener("orientationchange", blockGyroEvent, { capture: true, passive: false });
+    window.addEventListener("deviceorientation", blockGyroEvent, { capture: true, passive: false });
+    window.addEventListener("deviceorientationabsolute", blockGyroEvent, { capture: true, passive: false });
   })();
 
   function normalizeComparablePhone(val) {
@@ -137,7 +150,7 @@
       await ensurePushOptedIn(OneSignal);
 
       try {
-        if (typeof Notification === "undefined" || Notification.permission === "default") {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
           await OneSignal.Slidedown.promptPush();
         }
       } catch(err) {
@@ -155,20 +168,28 @@
       }
 
       OneSignal.Notifications.addEventListener('foregroundWillDisplay', function(event) {
-          var notifData = event.notification;
-          if (notifData) {
-              var title = notifData.title || "إشعار جديد";
-              var body = notifData.body || "";
-              if (typeof addNotificationToCenter === 'function') {
-                  addNotificationToCenter(title, body);
+          try {
+              var notifData = event && event.notification ? event.notification : null;
+              if (notifData) {
+                  var title = notifData.title || "إشعار جديد";
+                  var body = notifData.body || "";
+                  if (typeof addNotificationToCenter === 'function') {
+                      addNotificationToCenter(title, body);
+                  }
               }
-          }
+          } catch (_) {}
       });
 
       OneSignal.Notifications.addEventListener('click', function(event) {
           try {
-              event.preventDefault();
-              const targetUrl = (event.notification && event.notification.launchURL) ? event.notification.launchURL : window.location.href;
+              const notifData = event && event.notification ? event.notification : null;
+              if (notifData && typeof addNotificationToCenter === 'function') {
+                  addNotificationToCenter(notifData.title || "إشعار جديد", notifData.body || "");
+              }
+              if (event && typeof event.preventDefault === 'function') {
+                  event.preventDefault();
+              }
+              const targetUrl = (notifData && notifData.launchURL) ? notifData.launchURL : window.location.href;
               if (targetUrl && targetUrl !== window.location.href) {
                   window.location.assign(targetUrl);
               }
@@ -180,11 +201,13 @@
 
   if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', function(event) {
-          if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
-              if (typeof addNotificationToCenter === 'function') {
-                  addNotificationToCenter(event.data.title, event.data.body);
+          try {
+              if (event.data && event.data.type === 'NEW_NOTIFICATION_RECEIVED') {
+                  if (typeof addNotificationToCenter === 'function') {
+                      addNotificationToCenter(event.data.title || "إشعار جديد", event.data.body || "");
+                  }
               }
-          }
+          } catch (_) {}
       });
   }
 </script>
@@ -219,6 +242,12 @@
             font-family: 'Cairo', sans-serif;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            transform: none !important;
+            rotate: none !important;
+        }
+        #app {
+            transform: none !important;
+            rotate: none !important;
         }
         header.bg-amazon-navy {
             padding-top: 24px !important;
@@ -528,7 +557,7 @@
                     <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-3">
                         <i class="fa-brands fa-whatsapp text-emerald-600 text-4xl animate-bounce"></i>
                         <h4 class="font-bold text-gray-800 text-sm">طلب التفعيل قيد المراجعة</h4>
-                        <p class="text-xs text-gray-600 leading-relaxed">تم إرسال طلب التفعيل بنجاح. يرجى الضغط على الزر بالأسفل لإرسال رسالة التفعيل إلى إدارة المتجر عبر الواتساب لتأكيد رقمك.</p>
+                        <p class="text-xs text-gray-600 leading-relaxed">تم إرسال طلب التفعيل بنجاح. يرجى الضغط على الزر بالأسفل لإرسال رسالة التفعيل إلى إدارة المتجر عبر الواتساب لتأكيد رقمك (ويتم التحقق تلقائياً أيضاً).</p>
                         <a id="btnSendWhatsappMsg" href="#" target="_blank" class="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow text-xs transition">
                             <i class="fa-brands fa-whatsapp text-base"></i> إرسال طلب التفعيل عبر الواتساب
                         </a>
@@ -834,12 +863,33 @@
         };
 
         let tempRegistrationData = null;
+        let approvalAutoPollTimer = null;
+
+        function startApprovalAutoCheck() {
+            stopApprovalAutoCheck();
+            approvalAutoPollTimer = setInterval(async () => {
+                const modalEl = document.getElementById('loginModal');
+                const step2El = document.getElementById('authFieldsStep2');
+                if (!modalEl || modalEl.classList.contains('hidden') || !step2El || step2El.classList.contains('hidden')) {
+                    stopApprovalAutoCheck();
+                    return;
+                }
+                await checkAdminApprovalStatus(true);
+            }, 5000);
+        }
+
+        function stopApprovalAutoCheck() {
+            if (approvalAutoPollTimer) {
+                clearInterval(approvalAutoPollTimer);
+                approvalAutoPollTimer = null;
+            }
+        }
 
         function isCustomerApproved(cust) {
-      if (!cust) return false;
-      const statusStr = cust.status ? String(cust.status).trim().toLowerCase() : '';
-      return statusStr === 'مفعل' || statusStr === 'مفعّل' || statusStr === 'approved' || statusStr === 'active';
-  }
+            if (!cust) return false;
+            const statusStr = cust.status ? String(cust.status).trim().toLowerCase() : '';
+            return statusStr === 'مفعل' || statusStr === 'مفعّل' || statusStr === 'approved' || statusStr === 'active';
+        }
 
         function completeAutoLoginOnActivation(custData, fallbackRegData = null) {
             const phone = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
@@ -850,6 +900,7 @@
 
             const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === normalizeComparablePhone(phone);
 
+            stopApprovalAutoCheck();
             state.user = { phone, name, address };
             localStorage.setItem('miro_user', JSON.stringify(state.user));
             tempRegistrationData = null;
@@ -1480,12 +1531,14 @@
         let authMode = 'signin';
         function openLoginModal(mode = 'signin') { setAuthMode(mode); document.getElementById('loginModal').classList.remove('hidden'); }
         function closeLoginModal() {
+            stopApprovalAutoCheck();
             document.getElementById('loginModal').classList.add('hidden');
             document.getElementById('authFieldsStep1').classList.remove('hidden');
             document.getElementById('authFieldsStep2').classList.add('hidden');
         }
 
         function setAuthMode(mode) {
+            stopApprovalAutoCheck();
             authMode = mode;
             const tabIn = document.getElementById('modalTabSignIn');
             const tabUp = document.getElementById('modalTabSignUp');
@@ -1594,15 +1647,18 @@
                 document.getElementById('btnSendWhatsappMsg').href = waUrl;
                 document.getElementById('authFieldsStep1').classList.add('hidden');
                 document.getElementById('authFieldsStep2').classList.remove('hidden');
-                document.getElementById('approvalStatusMsg').textContent = "";
+                document.getElementById('approvalStatusMsg').textContent = state.lang === 'ar' ? "جاري المتابعة التلقائية لحالة التفعيل..." : "Auto-checking activation status...";
+                startApprovalAutoCheck();
             }
         }
 
-        async function checkAdminApprovalStatus() {
+        async function checkAdminApprovalStatus(isAutoCheck = false) {
             const statusMsg = document.getElementById('approvalStatusMsg');
             const btn = document.getElementById('btnCheckApproval');
-            statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking...";
-            btn.disabled = true;
+            if (!isAutoCheck) {
+                if (statusMsg) statusMsg.textContent = state.lang === 'ar' ? "جاري التحقق من حالة التفعيل..." : "Checking...";
+                if (btn) btn.disabled = true;
+            }
 
             await fetchDataFromSheets(true);
 
@@ -1612,15 +1668,18 @@
                 if (cust && isCustomerApproved(cust)) {
                     completeAutoLoginOnActivation(cust, tempRegistrationData);
                     closeLoginModal();
-                    btn.disabled = false;
+                    if (btn) btn.disabled = false;
                     return;
                 }
             }
-            statusMsg.textContent = state.lang === 'ar' ? "الحساب ما زال قيد الانتظار. يرجى إرسال رسالة الواتساب للإدارة." : "Account still pending.";
-            btn.disabled = false;
+            if (!isAutoCheck) {
+                if (statusMsg) statusMsg.textContent = state.lang === 'ar' ? "الحساب ما زال قيد الانتظار. يرجى إرسال رسالة الواتساب للإدارة." : "Account still pending.";
+                if (btn) btn.disabled = false;
+            }
         }
 
         function handleSignOut() {
+            stopApprovalAutoCheck();
             logoutOneSignalUser();
             tempRegistrationData = null;
             state.user = null;
