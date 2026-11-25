@@ -99,15 +99,20 @@ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
       if (OneSignal.User.externalId !== cleanPhone) {
         await OneSignal.login(cleanPhone);
       }
+      __lastBoundOneSignalPhone = cleanPhone;
+    } catch (_) {
+      __lastBoundOneSignalPhone = cleanPhone;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    try {
       if (typeof OneSignal.User.addTag === 'function') {
         await OneSignal.User.addTag("user_phone", cleanPhone);
       }
-      __lastBoundOneSignalPhone = cleanPhone;
-      await new Promise(resolve => setTimeout(resolve, 300));
-      await ensurePushOptedIn(OneSignal);
-    } catch (err) {
-      __lastBoundOneSignalPhone = cleanPhone;
-    }
+    } catch (_) {}
+
+    await ensurePushOptedIn(OneSignal);
   });
 }
   function logoutOneSignalUser() {
