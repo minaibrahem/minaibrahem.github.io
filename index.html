@@ -88,19 +88,20 @@
     } catch (_) {}
   }
 
- async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
   return enqueueOneSignalTask(async () => {
     const cleanPhone = normalizeComparablePhone(rawPhone);
     if (!OneSignal || !OneSignal.User || !cleanPhone) return;
 
     await ensurePushOptedIn(OneSignal);
 
-    if (__lastBoundOneSignalPhone === cleanPhone && OneSignal.User.externalId === cleanPhone) {
-      return;
-    }
-
     try {
-      await OneSignal.login(cleanPhone);
+      if (OneSignal.User.externalId !== cleanPhone) {
+        await OneSignal.login(cleanPhone);
+      }
+      if (typeof OneSignal.User.addTag === 'function') {
+        await OneSignal.User.addTag("user_phone", cleanPhone);
+      }
       __lastBoundOneSignalPhone = cleanPhone;
       await new Promise(resolve => setTimeout(resolve, 300));
       await ensurePushOptedIn(OneSignal);
