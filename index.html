@@ -89,49 +89,48 @@
     } catch (_) {}
   }
 
-  async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
-    return enqueueOneSignalTask(async () => {
-      const cleanPhone = normalizeComparablePhone(rawPhone);
-      if (!OneSignal || !OneSignal.User || !cleanPhone) return;
+ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
+  return enqueueOneSignalTask(async () => {
+    const cleanPhone = normalizeComparablePhone(rawPhone);
+    console.log("[OneSignal Bind Attempt]", { rawPhone, cleanPhone, savedUser: localStorage.getItem('miro_user') });
+    if (!OneSignal || !OneSignal.User || !cleanPhone) return;
 
-      try {
-        await ensurePushOptedIn(OneSignal);
+    try {
+      await ensurePushOptedIn(OneSignal);
 
-        const currentExtId = OneSignal.User.externalId ? String(OneSignal.User.externalId).trim() : '';
-        const needsLogin = (__lastBoundOneSignalPhone !== cleanPhone) || (currentExtId !== cleanPhone);
-
-        if (needsLogin) {
-          if (currentExtId && currentExtId !== cleanPhone && typeof OneSignal.logout === 'function') {
-            try {
-              await OneSignal.logout();
-              await new Promise(resolve => setTimeout(resolve, 900));
-            } catch (_) {}
-          }
-
-          await OneSignal.login(cleanPhone);
-          __lastBoundOneSignalPhone = cleanPhone;
-          __lastTaggedOneSignalPhone = null;
-          await new Promise(resolve => setTimeout(resolve, 700));
+      const currentExtId = OneSignal.User.externalId ? String(OneSignal.User.externalId).trim() : '';
+      if (__lastBoundOneSignalPhone !== cleanPhone || currentExtId !== cleanPhone) {
+        if (currentExtId && currentExtId !== cleanPhone && typeof OneSignal.logout === 'function') {
+          try {
+            await OneSignal.logout();
+            await new Promise(resolve => setTimeout(resolve, 900));
+          } catch (_) {}
         }
 
-        if (__lastTaggedOneSignalPhone !== cleanPhone && typeof OneSignal.User.addTag === 'function') {
-          await OneSignal.User.addTag("user_phone", cleanPhone);
-          __lastTaggedOneSignalPhone = cleanPhone;
-          await new Promise(resolve => setTimeout(resolve, 400));
-        }
-
-        await ensurePushOptedIn(OneSignal);
-
-        console.log("[OneSignal Bound]", {
-          requestedPhone: cleanPhone,
-          externalId: OneSignal.User.externalId,
-          optedIn: OneSignal.User && OneSignal.User.PushSubscription ? OneSignal.User.PushSubscription.optedIn : null
-        });
-      } catch (err) {
-        console.warn("[OneSignal Bind Error]", err);
+        await OneSignal.login(cleanPhone);
+        __lastBoundOneSignalPhone = cleanPhone;
+        __lastTaggedOneSignalPhone = null;
+        await new Promise(resolve => setTimeout(resolve, 700));
       }
-    });
-  }
+
+      if (__lastTaggedOneSignalPhone !== cleanPhone && typeof OneSignal.User.addTag === 'function') {
+        await OneSignal.User.addTag("user_phone", cleanPhone);
+        __lastTaggedOneSignalPhone = cleanPhone;
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+
+      await ensurePushOptedIn(OneSignal);
+
+      console.log("[OneSignal Bound]", {
+        requestedPhone: cleanPhone,
+        externalId: OneSignal.User.externalId,
+        optedIn: OneSignal.User && OneSignal.User.PushSubscription ? OneSignal.User.PushSubscription.optedIn : null
+      });
+    } catch (err) {
+      console.warn("[OneSignal Bind Error]", err);
+    }
+  });
+}
 
   function logoutOneSignalUser() {
     __lastBoundOneSignalPhone = null;
