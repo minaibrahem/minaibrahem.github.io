@@ -93,29 +93,33 @@ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
     const cleanPhone = normalizeComparablePhone(rawPhone);
     if (!OneSignal || !OneSignal.User || !cleanPhone) return;
 
-    await ensurePushOptedIn(OneSignal);
+    try {
+      if (OneSignal.User && OneSignal.User.PushSubscription) {
+        if (!OneSignal.User.PushSubscription.optedIn && typeof OneSignal.User.PushSubscription.optIn === 'function') {
+          await OneSignal.User.PushSubscription.optIn();
+        }
+      }
+    } catch (_) {}
+
+    if (__lastBoundOneSignalPhone === cleanPhone && OneSignal.User.externalId === cleanPhone) {
+      return;
+    }
 
     try {
-      if (OneSignal.User.externalId !== cleanPhone) {
-        await OneSignal.login(cleanPhone);
-      }
+      await OneSignal.login(cleanPhone);
       __lastBoundOneSignalPhone = cleanPhone;
     } catch (_) {
       __lastBoundOneSignalPhone = cleanPhone;
     }
-
-    await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
       if (typeof OneSignal.User.addTag === 'function') {
         await OneSignal.User.addTag("user_phone", cleanPhone);
       }
     } catch (_) {}
-
-    await ensurePushOptedIn(OneSignal);
   });
 }
-  function logoutOneSignalUser() {
+    function logoutOneSignalUser() {
     __lastBoundOneSignalPhone = null;
     return enqueueOneSignalTask(async () => {
       window.OneSignalDeferred = window.OneSignalDeferred || [];
