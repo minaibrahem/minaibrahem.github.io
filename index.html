@@ -96,32 +96,25 @@ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
     try {
       await ensurePushOptedIn(OneSignal);
 
-      const currentId = OneSignal.User.externalId;
-      if (currentId && String(currentId).trim() !== cleanPhone) {
-        if (typeof OneSignal.logout === 'function') {
-          await OneSignal.logout();
-          await new Promise(resolve => setTimeout(resolve, 1000));
+      if (__lastBoundOneSignalPhone !== cleanPhone) {
+        if (OneSignal.User.externalId !== cleanPhone) {
+          await OneSignal.login(cleanPhone);
+          await new Promise(resolve => setTimeout(resolve, 600));
         }
+
+        if (typeof OneSignal.User.addTag === 'function') {
+          await OneSignal.User.addTag("user_phone", cleanPhone);
+        }
+
+        __lastBoundOneSignalPhone = cleanPhone;
+        await ensurePushOptedIn(OneSignal);
+
+        console.log("[OneSignal Bound]", {
+          requestedPhone: cleanPhone,
+          externalId: OneSignal.User.externalId,
+          optedIn: OneSignal.User && OneSignal.User.PushSubscription ? OneSignal.User.PushSubscription.optedIn : null
+        });
       }
-
-      if (OneSignal.User.externalId !== cleanPhone) {
-        await OneSignal.login(cleanPhone);
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-
-      if (typeof OneSignal.User.addTag === 'function') {
-        await OneSignal.User.addTag("user_phone", cleanPhone);
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-
-      await ensurePushOptedIn(OneSignal);
-      __lastBoundOneSignalPhone = cleanPhone;
-
-      console.log("[OneSignal Bound]", {
-        requestedPhone: cleanPhone,
-        externalId: OneSignal.User.externalId,
-        optedIn: OneSignal.User && OneSignal.User.PushSubscription ? OneSignal.User.PushSubscription.optedIn : null
-      });
     } catch (err) {
       console.warn("[OneSignal Bind Error]", err);
     }
@@ -907,44 +900,46 @@ async function bindCustomerOneSignalUser(OneSignal, rawPhone) {
         }
 
         function completeAutoLoginOnActivation(custData, fallbackRegData = null) {
-            const phoneRaw = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
-            const phone = normalizeComparablePhone(phoneRaw);
-            const name = (custData && custData.name) ? String(custData.name).trim() : ((fallbackRegData && fallbackRegData.name) ? fallbackRegData.name : 'عميل ميرو');
-            const address = (custData && custData.address) ? String(custData.address).trim() : ((fallbackRegData && fallbackRegData.address) ? fallbackRegData.address : '');
+  const phoneRaw = (custData && custData.phone) ? String(custData.phone).trim() : (fallbackRegData ? fallbackRegData.phone : '');
+  const phone = normalizeComparablePhone(phoneRaw);
+  const name = (custData && custData.name) ? String(custData.name).trim() : ((fallbackRegData && fallbackRegData.name) ? fallbackRegData.name : 'عميل ميرو');
+  const address = (custData && custData.address) ? String(custData.address).trim() : ((fallbackRegData && fallbackRegData.address) ? fallbackRegData.address : '');
 
-            if (!phone) return;
+  if (!phone) return;
 
-            const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === phone;
+  const wasAlreadyLoggedInSameUser = state.user && normalizeComparablePhone(state.user.phone) === phone;
 
-            stopApprovalAutoCheck();
-            state.user = { phone, name, address };
-            localStorage.setItem('miro_user', JSON.stringify(state.user));
-            tempRegistrationData = null;
+  stopApprovalAutoCheck();
+  state.user = { phone, name, address };
+  localStorage.setItem('miro_user', JSON.stringify(state.user));
+  tempRegistrationData = null;
 
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {
-                await bindCustomerOneSignalUser(OneSignal, phone);
-            });
+  if (__lastBoundOneSignalPhone !== phone) {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await bindCustomerOneSignalUser(OneSignal, phone);
+    });
+  }
 
-            updateProfileUI();
-            updateCartUI();
+  updateProfileUI();
+  updateCartUI();
 
-            if (!wasAlreadyLoggedInSameUser) {
-                const notifTitle = state.lang === 'ar' ? "تم تفعيل حسابك وتسجيل الدخول 🎉" : "Account Activated & Signed In 🎉";
-                const notifBody = state.lang === 'ar'
-                    ? `أهلاً بك يا ${name}، تم تفعيل حسابك بنجاح وتم تسجيل دخولك تلقائياً.`
-                    : `Welcome ${name}, your account has been activated and you are now signed in automatically.`;
+  if (!wasAlreadyLoggedInSameUser) {
+    const notifTitle = state.lang === 'ar' ? "تم تفعيل حسابك وتسجيل الدخول 🎉" : "Account Activated & Signed In 🎉";
+    const notifBody = state.lang === 'ar'
+      ? `أهلاً بك يا ${name}، تم تفعيل حسابك بنجاح وتم تسجيل دخولك تلقائياً.`
+      : `Welcome ${name}, your account has been activated and you are now signed in automatically.`;
 
-                addNotificationToCenter(notifTitle, notifBody);
-                showToast(
-                    state.lang === 'ar'
-                        ? "تم تفعيل حسابك وتسجيل الدخول تلقائياً!"
-                        : "Account activated and signed in automatically!",
-                    "fa-circle-check",
-                    3500
-                );
-            }
-        }
+    addNotificationToCenter(notifTitle, notifBody);
+    showToast(
+      state.lang === 'ar'
+        ? "تم تفعيل حسابك وتسجيل الدخول تلقائياً!"
+        : "Account activated and signed in automatically!",
+      "fa-circle-check",
+      3500
+    );
+  }
+}
 
         window.addEventListener('DOMContentLoaded', () => {
             applyLanguageUI();
